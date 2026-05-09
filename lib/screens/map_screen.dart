@@ -2024,52 +2024,80 @@ $placemarks  </Document>
       return;
     }
 
-    _showSnackBar('Sending ping...');
+    _showSnackBar('Sending discovery ping...');
     SoundService().playPingSent();
 
-    // Send ping via LoRa companion
-    final result = await _locationService.loraCompanion.ping(
-      latitude: _currentPosition!.latitude,
-      longitude: _currentPosition!.longitude,
-    );
+    int responseCount = 0;
 
-    // Sound/vibration feedback based on result
-    final pingSuccess = result.status == PingStatus.success;
-    SoundService().playForPingResult(
-      success: pingSuccess,
-      snr: result.snr,
-      rssi: result.rssi,
-    );
+    // Subscribe
+    final subscription = _locationService.loraCompanion.pingResultsManual.listen((result) async {
+      final pingSuccess = result.status == PingStatus.success;
+      if (pingSuccess) {
+        responseCount++;
+        SoundService().playForPingResult(
+          success: pingSuccess,
+          snr: result.snr,
+          rssi: result.rssi,
+        );
 
-    // Create and save sample
-    final geohash = GeohashUtils.sampleKey(
-      _currentPosition!.latitude,
-      _currentPosition!.longitude,
-    );
-    
-    final sample = Sample(
-      id: '${DateTime.now().millisecondsSinceEpoch}_$geohash',
-      position: _currentPosition!,
-      timestamp: DateTime.now(),
-      path: result.nodeId, // Save repeater/node ID
-      geohash: geohash,
-      rssi: result.rssi,
-      snr: result.snr,
-      pingSuccess: pingSuccess,
-    );
-    
-    await DatabaseService().insertSample(sample);
+        // Create and save sample
+        final geohash = GeohashUtils.sampleKey(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+        );
 
-    // Reload samples to update map
+        final sample = Sample(
+          id: '${DateTime.now().millisecondsSinceEpoch}_$geohash',
+          position: _currentPosition!,
+          timestamp: DateTime.now(),
+          path: result.nodeId, // Save repeater/node ID
+          geohash: geohash,
+          rssi: result.rssi,
+          snr: result.snr,
+          pingSuccess: pingSuccess,
+          responseTimeMs: result.responseTimeMs,
+        );
+
+        await DatabaseService().insertSample(sample);
+
+        // Reload samples to update map
+        await _loadSamples();
+        _showSnackBar('✅ Ping heard by ${result.nodeId!.length > 8 ? result.nodeId!.substring(0,8) : result.nodeId}');
+      }
+    });
+    try {
+      // Waiting for timeout
+      await _locationService.loraCompanion.ping(
+        latitude: _currentPosition!.latitude,
+        longitude: _currentPosition!.longitude,
+        timeoutSeconds: 10,
+        manual: true,
+      );
+    } finally {
+      await subscription.cancel();
+    }
+    // update map
     await _loadSamples();
 
-    // Show result
-    if (pingSuccess) {
-      _showSnackBar('✅ Ping heard by ${result.nodeId}');
-    } else if (result.status == PingStatus.timeout) {
-      _showSnackBar('❌ No response - dead zone');
+    if (responseCount > 0) {
+      _showSnackBar('✅ Discovery complete: Found $responseCount repeater(s)');
     } else {
-      _showSnackBar('❌ Ping failed: ${result.error}');
+      final geohash = GeohashUtils.sampleKey(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+      );
+      final failedSample = Sample(
+        id: '${DateTime.now().millisecondsSinceEpoch}_$geohash',
+        position: _currentPosition!,
+        timestamp: DateTime.now(),
+        geohash: geohash,
+        pingSuccess: false,
+      );
+      await DatabaseService().insertSample(failedSample);
+      _showSnackBar('❌ No response - dead zone');
+      SoundService().playForPingResult(
+        success: false,
+      );
     }
   }
 
@@ -3791,7 +3819,7 @@ $placemarks  </Document>
     
     // Fall back to checking LoRa service's contact cache
     final loraRepeater = _locationService.loraCompanion.getRepeaterLocation(fullId!);
-    return loraRepeater?.name ?? fullId; // Return full ID if no name
+    return loraRepeater?.name ?? null; // Return full ID if no name
   }
   
   void _showSampleInfo(Sample sample) {

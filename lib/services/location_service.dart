@@ -589,94 +589,68 @@ class LocationService {
   
   /// Perform ping in background and update sample when complete
   void _performPingInBackground(LatLng latLng, String geohash) async {
+
+    String? ductingRisk;
+    if (_ductingEnabled) {
+      ductingRisk = await _ductingService.getCurrentRisk(DateTime.now());
+      if (ductingRisk == DuctingRisk.unknown) ductingRisk = null;
+    }
+
+    bool anySuccess = false;
+    await _logger.logPingEvent('Service ID in Background: ${identityHashCode(_loraCompanion)}');
+    final subscription = _loraCompanion.pingResults.listen((pingResult) async {
+      await _logger.logPingEvent('RECEIVED VIA STREAM!');
+      if (pingResult.status == PingStatus.success) {
+        anySuccess = true;
+        await _logger.logPingEvent('Response from Node: ${pingResult.nodeId}, RSSI: ${pingResult.rssi}, SNR: ${pingResult.snr}');
+        _soundService.playForPingResult(success: true, snr: pingResult.snr, rssi: pingResult.rssi);
+
+        final sample = Sample(
+          id: _generateUniqueId(),
+          position: latLng,
+          timestamp: DateTime.now(),
+          path: pingResult.nodeId,
+          geohash: geohash,
+          rssi: pingResult.rssi,
+          snr: pingResult.snr,
+          pingSuccess: true,
+          responseTimeMs: pingResult.responseTimeMs,
+          ductingRisk: ductingRisk,
+        );
+
+        await _dbService.insertSample(sample);
+        _sampleSavedController.add(null); // Обновляем UI/карту мгновенно
+      }
+    });
+
     try {
-      // Get user-configured discovery timeout
       final timeoutSeconds = await _settings.getDiscoveryTimeout();
-      await _logger.logPingEvent('Sending ping to LoRa device (timeout: ${timeoutSeconds}s)...');
-      final pingResult = await _loraCompanion.ping(
+      await _logger.logPingEvent('Sending ping (timeout: ${timeoutSeconds}s)...');
+      await _loraCompanion.ping(
         latitude: latLng.latitude,
         longitude: latLng.longitude,
         timeoutSeconds: timeoutSeconds,
       );
-      
-      final pingSuccess = pingResult.status == PingStatus.success;
-      final nodeId = pingResult.nodeId;
-      
-      await _logger.logPingEvent('Ping result: ${pingResult.status.name}, Node: $nodeId, RSSI: ${pingResult.rssi}, SNR: ${pingResult.snr}');
-      print('Ping complete: ${pingResult.status.name}, Node: $nodeId, RSSI: ${pingResult.rssi}, SNR: ${pingResult.snr}');
-      
-      // Sound feedback based on result quality
-      _soundService.playForPingResult(
-        success: pingSuccess,
-        snr: pingResult.snr,
-        rssi: pingResult.rssi,
-      );
-      
-      // Update notification with result
-      final shortId = (nodeId != null && nodeId.isNotEmpty)
-          ? (nodeId.length > 8 ? nodeId.substring(0, 8).toUpperCase() : nodeId.toUpperCase())
-          : 'repeater';
-      final resultText = pingSuccess ? '✅ Heard by $shortId' : '❌ No response';
-      FlutterForegroundTask.updateService(
-        notificationTitle: 'MeshCore Wardrive',
-        notificationText: resultText,
-      );
-      
-      // Notify UI
-      _pingEventController.add(pingSuccess ? 'success' : 'failed');
-      
-      // Reset notification after 3 seconds
-      Future.delayed(const Duration(seconds: 3), () {
-        FlutterForegroundTask.updateService(
-          notificationTitle: 'MeshCore Wardrive',
-          notificationText: 'Location tracking active',
+      // if no responses
+      if (!anySuccess) {
+        _pingEventController.add('failed');
+        final failedSample = Sample(
+          id: _generateUniqueId(),
+          position: latLng,
+          timestamp: DateTime.now(),
+          geohash: geohash,
+          pingSuccess: false,
         );
-      });
-      
-      // Tag with ducting risk if monitoring is enabled
-      String? ductingRisk;
-      if (_ductingEnabled) {
-        ductingRisk = await _ductingService.getCurrentRisk(DateTime.now());
-        if (ductingRisk == DuctingRisk.unknown) ductingRisk = null;
+        await _dbService.insertSample(failedSample);
+        _sampleSavedController.add(null);
+      } else {
+        _pingEventController.add('success');
       }
-      
-      // Create a new sample with ping results
-      final sample = Sample(
-        id: _generateUniqueId(),
-        position: latLng,
-        timestamp: DateTime.now(),
-        path: nodeId,
-        geohash: geohash,
-        rssi: pingResult.rssi,
-        snr: pingResult.snr,
-        pingSuccess: pingSuccess,
-        responseTimeMs: pingResult.responseTimeMs,
-        ductingRisk: ductingRisk,
-      );
-      
-      // Save ping result as new sample
-      await _dbService.insertSample(sample);
-      print('Saved ping result: ${sample.id}');
-      // Notify listeners
-      _sampleSavedController.add(null);
+
     } catch (e) {
       await _logger.logError('Background Ping', e.toString());
-      print('Error during background ping: $e');
-      // Save failed ping result
-      final sample = Sample(
-        id: _generateUniqueId(),
-        position: latLng,
-        timestamp: DateTime.now(),
-        path: null,
-        geohash: geohash,
-        rssi: null,
-        snr: null,
-        pingSuccess: false,
-      );
-      await _dbService.insertSample(sample);
-      // Notify listeners
-      _sampleSavedController.add(null);
     } finally {
+      await subscription.cancel();
       _pingInProgress = false;
     }
   }
