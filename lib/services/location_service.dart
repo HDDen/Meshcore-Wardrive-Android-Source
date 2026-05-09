@@ -642,6 +642,9 @@ class LocationService {
           pingSuccess: false,
         );
         await _dbService.insertSample(failedSample);
+        SoundService().playForPingResult(
+          success: false,
+        );
         _sampleSavedController.add(null);
       } else {
         _pingEventController.add('success');
