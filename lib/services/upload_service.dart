@@ -227,7 +227,7 @@ class UploadService {
     final json = prefs.getString(_selectedEndpointsKey);
     
     if (json == null || json.isEmpty) {
-      return ['Default']; // Default to the default endpoint
+      return ['Meshcoretel']; // Default to the default endpoint
     }
     
     final List<dynamic> decoded = jsonDecode(json);
