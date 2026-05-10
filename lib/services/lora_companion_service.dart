@@ -61,14 +61,16 @@ class LoRaCompanionService {
   String? _deviceName; // Connected device's advertised name
   
   // State
-  final _pingResultController = StreamController<PingResult>.broadcast();
+  final _pingResultController = StreamController<PingResult>.broadcast(sync: true);
+  final _pingResultControllerManual = StreamController<PingResult>.broadcast(sync: true);
   final _pendingPings = <int, Completer<PingResult>>{}; // tag -> completer
+  final Map<int, Map<String, dynamic>> _pingContexts = {};
   final Map<int, List<Map<String, dynamic>>> _pingResponses = {}; // tag -> list of responses
   final _random = Random();
   int? _batteryPercent;
   final _batteryController = StreamController<int?>.broadcast();
   StreamSubscription? _connectionStateSubscription;
-  
+
   
   // Track pending contact requests
   final Set<String> _pendingContactRequests = {};
@@ -106,6 +108,7 @@ class LoRaCompanionService {
   ConnectionType get connectionType => _connectionType;
   String? get deviceName => _deviceName;
   Stream<PingResult> get pingResults => _pingResultController.stream;
+  Stream<PingResult> get pingResultsManual => _pingResultControllerManual.stream;
   int? get batteryPercent => _batteryPercent;
   Stream<int?> get batteryStream => _batteryController.stream;
 
@@ -116,7 +119,7 @@ class LoRaCompanionService {
   void setIgnoredRepeaterPrefix(String? prefix) {
     _ignoredRepeaterPrefix = prefix;
   }
-  
+
   /// Check if a node ID is a companion device (not a repeater)
   /// Uses cached node type from contact info (advType: 1=companion, 2=repeater, 3=room)
   bool _isCompanionNode(String nodeId) {
@@ -142,7 +145,7 @@ class LoRaCompanionService {
 
   /// Scan for Bluetooth LoRa devices
   Future<List<BluetoothDevice>> scanBluetoothDevices({
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 3),
   }) async {
     final devices = <BluetoothDevice>[];
     
@@ -575,152 +578,58 @@ class LoRaCompanionService {
   /// Uses MeshCore Discovery protocol (DISCOVER_REQ/DISCOVER_RESP)
   /// Note: _pingInProgress in LocationService prevents overlapping pings.
   /// No additional rate limit — matches v1.0.33 behavior for fastest coverage.
-  Future<PingResult> ping({
+  Future<void> ping({
     double? latitude,
     double? longitude,
     int timeoutSeconds = 30,
+    bool manual = false,
   }) async {
-    if (!isDeviceConnected) {
-      return PingResult(
+    if (!isDeviceConnected || latitude == null || longitude == null) {
+      _pingResultController.add(PingResult(
         timestamp: DateTime.now(),
         status: PingStatus.failed,
-        error: 'LoRa device not connected',
-      );
-    }
-
-    if (latitude == null || longitude == null) {
-      return PingResult(
-        timestamp: DateTime.now(),
-        status: PingStatus.failed,
-        error: 'No GPS location',
-      );
+        error: !isDeviceConnected ? 'Device not connected' : 'No GPS',
+      ));
+      return;
     }
 
     try {
-      // Update device position for proper mesh routing
       await _updateDevicePosition(latitude, longitude);
-      
-      // Send zero-hop advertisement to get immediate contact updates
-      final zeroHopPayload = Uint8List.fromList([0]);  // 0 = zero-hop
-      final zeroHopCmd = _createCommandForDevice(CMD_SEND_ADVERT, zeroHopPayload);
-      _debugLog.logInfo('📡 Sending zero-hop advertisement');
+      final zeroHopCmd = _createCommandForDevice(CMD_SEND_ADVERT, Uint8List.fromList([0]));
       await _sendBinaryToDevice(zeroHopCmd);
-      
-      // Small delay to let adverts propagate
       await Future.delayed(const Duration(milliseconds: 100));
-      
-      // Generate random tag for this discovery request
+
       final tag = _random.nextInt(0xFFFFFFFF);
-      
-      // Create Discovery request payload (prefixOnly=false to get full 32-byte keys for contact lookup)
       final discoveryPayload = _protocol.createDiscoveryRequestPayload(tag, prefixOnly: false);
-      _debugLog.logInfo('Discovery payload: ${discoveryPayload.map((b) => b.toRadixString(16).padLeft(2, "0")).join(" ")}');
-      
       final controlCmd = _createCommandForDevice(CMD_SEND_CONTROL_DATA, discoveryPayload);
-      _debugLog.logInfo('Full command frame: ${controlCmd.take(30).map((b) => b.toRadixString(16).padLeft(2, "0")).join(" ")}...');
-      
-      _debugLog.logInfo('📡 Sending DISCOVER_REQ with tag=0x${tag.toRadixString(16).padLeft(8, "0")}');
       await _sendBinaryToDevice(controlCmd);
-      
-      _lastPingTime = DateTime.now();
-      final pingSendTime = _lastPingTime!;
-      _debugLog.logPing('📍 Discovery ping sent at ($latitude, $longitude)');
-      _debugLog.logInfo('Note: Repeaters rate-limit to 4 responses per 2 minutes');
-      print('📍 Discovery ping sent, tag=0x${tag.toRadixString(16)}, waiting for responses...');
 
-      // Setup response tracking
-      final completer = Completer<PingResult>();
-      _pendingPings[tag] = completer;
-      _pingResponses[tag] = [];
+      final pingSendTime = DateTime.now();
+      final completer = Completer<void>();
 
-      // Early completion timer: complete after 3 seconds if we have responses
-      Timer(const Duration(seconds: 3), () {
-        if (!completer.isCompleted) {
-          final responses = _pingResponses[tag] ?? [];
-          if (responses.isNotEmpty) {
-            // We have at least one response, complete early
-            _pendingPings.remove(tag);
-            _pingResponses.remove(tag);
-            
-            responses.sort((a, b) => (b['snr'] as int).compareTo(a['snr'] as int));
-            final best = responses.first;
-            
-            final elapsed = DateTime.now().difference(pingSendTime).inMilliseconds;
-            print('✅ Ping complete (early): ${responses.length} repeater(s) responded in ${elapsed}ms');
-            _debugLog.logPing('✅ Best response: ${best["nodeId"]} (SNR=${best["snr"]}, RSSI=${best["rssi"]}, ${elapsed}ms)');
-            
-            final result = PingResult(
-              timestamp: DateTime.now(),
-              status: PingStatus.success,
-              rssi: best['rssi'] as int,
-              snr: best['snr'] as int,
-              nodeId: best['nodeId'] as String,
-              latitude: latitude,
-              longitude: longitude,
-              responseTimeMs: elapsed,
-            );
-            completer.complete(result);
-            _pingResultController.add(result);
-          }
-        }
-      });
+      _pingContexts[tag] = {
+        'start': pingSendTime,
+        'lat': latitude,
+        'lon': longitude,
+        'manual': manual,
+        'completer': completer,
+      };
 
-      // Final timeout handler: wait full timeout if no responses yet
       Timer(Duration(seconds: timeoutSeconds), () {
-        if (!completer.isCompleted) {
-          _pendingPings.remove(tag);
-          final responses = _pingResponses.remove(tag) ?? [];
-          
-          if (responses.isEmpty) {
-            // No repeaters responded - dead zone
-            final elapsed = DateTime.now().difference(pingSendTime).inMilliseconds;
-            print('⏰ Ping timeout after ${elapsed}ms. No repeaters responded.');
-            final result = PingResult(
-              timestamp: DateTime.now(),
-              status: PingStatus.timeout,
-              latitude: latitude,
-              longitude: longitude,
-              error: 'No repeaters in range - dead zone',
-              responseTimeMs: elapsed,
-            );
-            completer.complete(result);
-            _pingResultController.add(result);
-          } else {
-            // Got responses after early timer - use the best one (highest SNR)
-            responses.sort((a, b) => (b['snr'] as int).compareTo(a['snr'] as int));
-            final best = responses.first;
-            
-            final elapsed = DateTime.now().difference(pingSendTime).inMilliseconds;
-            print('✅ Ping complete: ${responses.length} repeater(s) responded in ${elapsed}ms');
-            _debugLog.logPing('✅ Best response: ${best["nodeId"]} (SNR=${best["snr"]}, RSSI=${best["rssi"]}, ${elapsed}ms)');
-            
-            final result = PingResult(
-              timestamp: DateTime.now(),
-              status: PingStatus.success,
-              rssi: best['rssi'] as int,
-              snr: best['snr'] as int,
-              nodeId: best['nodeId'] as String,
-              latitude: latitude,
-              longitude: longitude,
-              responseTimeMs: elapsed,
-            );
-            completer.complete(result);
-            _pingResultController.add(result);
-          }
+        final context = _pingContexts.remove(tag);
+        if (context != null && !completer.isCompleted) {
+          completer.complete();
         }
       });
 
-      return await completer.future;
+      await completer.future;
+
     } catch (e) {
-      final result = PingResult(
+      _pingResultController.add(PingResult(
         timestamp: DateTime.now(),
         status: PingStatus.failed,
-        latitude: latitude,
-        longitude: longitude,
         error: e.toString(),
-      );
-      _pingResultController.add(result);
-      return result;
+      ));
     }
   }
 
@@ -919,25 +828,42 @@ class LoRaCompanionService {
         _debugLog.logInfo('📞 Requesting position for $pubkeyShort');
         await _requestContactDetails(pubkeyBytes);
       }
-      
       if (shouldIgnore) {
         _debugLog.logInfo('⛔ Ignoring discovery response from mobile repeater: $pubkeyShort');
         return;
       }
       
       // Check if this response matches a pending ping
-      final completer = _pendingPings[tag];
-      if (completer != null && !completer.isCompleted) {
-        // Add this response to the list
-        _pingResponses[tag]?.add({
-          'nodeId': pubkeyShort,
-          'snr': snr,
-          'rssi': rssi,
-          'node_type': nodeType,
-        });
-        
-        _debugLog.logPing('📡 Repeater $pubkeyShort responded (SNR=$snr, RSSI=$rssi)');
-        
+      final context = _pingContexts[tag];
+
+      if (context != null) {
+        final completer = context['completer'] as Completer<void>;
+
+        if (!completer.isCompleted) {
+
+          final startTime = context['start'] as DateTime;
+          final elapsed = DateTime.now().difference(startTime).inMilliseconds;
+          final lat = context['lat'] as double;
+          final lon = context['lon'] as double;
+          final manual = context['manual'] as bool;
+
+          final instantResult = PingResult(
+            status: PingStatus.success,
+            nodeId: pubkey,
+            rssi: rssi,
+            snr: snr,
+            timestamp: DateTime.now(),
+            latitude: lat,
+            longitude: lon,
+            responseTimeMs: elapsed,
+          );
+          if (manual) {
+            _pingResultControllerManual.add(instantResult);
+          } else {
+            _pingResultController.add(instantResult);
+          }
+          _debugLog.logPing('📡 Repeater $pubkeyShort responded (SNR=$snr, RSSI=$rssi)');
+        }
         // Note: We don't complete immediately - we wait for timeout to collect all responses
         // and then pick the best one (highest SNR)
       } else {
