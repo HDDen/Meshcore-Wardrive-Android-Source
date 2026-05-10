@@ -21,7 +21,7 @@ class UploadService {
   static const String _selectedEndpointsKey = 'selected_endpoints'; // JSON list of selected endpoint names
   
   // Default URL (user can change this)
-  static const String defaultApiUrl = 'https://meshwar-map.pages.dev/api/samples';
+  static const String defaultApiUrl = 'https://meshcoretel.ru/wardrive/samples';
   
   final DatabaseService _db = DatabaseService();
   
@@ -208,7 +208,7 @@ class UploadService {
     
     if (json == null || json.isEmpty) {
       // Return default endpoint
-      return [UploadEndpoint(name: 'Default', url: defaultApiUrl)];
+      return [UploadEndpoint(name: 'Meshcoretel', url: defaultApiUrl)];
     }
     
     final List<dynamic> decoded = jsonDecode(json);
