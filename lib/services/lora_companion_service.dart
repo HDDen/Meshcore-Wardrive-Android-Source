@@ -145,7 +145,7 @@ class LoRaCompanionService {
 
   /// Scan for Bluetooth LoRa devices
   Future<List<BluetoothDevice>> scanBluetoothDevices({
-    Duration timeout = const Duration(seconds: 10),
+    Duration timeout = const Duration(seconds: 3),
   }) async {
     final devices = <BluetoothDevice>[];
     

@@ -60,6 +60,7 @@ class _MapScreenState extends State<MapScreen> {
   final ScreenshotController _screenshotController = ScreenshotController();
   
   bool _isTracking = false;
+  bool _isConnecting = false;
   int _sampleCount = 0;
   List<Sample> _samples = [];
   AggregationResult? _aggregationResult;
@@ -1075,9 +1076,9 @@ $placemarks  </Document>
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, {Duration? duration}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+      SnackBar(content: Text(message), duration: duration ?? const Duration(seconds: 2)),
     );
   }
   
@@ -1969,12 +1970,12 @@ $placemarks  </Document>
               // Connect button or Manual Ping
               if (!_loraConnected)
                 TextButton(
-                  onPressed: _showConnectionDialog,
+                  onPressed: _isConnecting ? null : _showConnectionDialog,
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
                   ),
-                  child: const Text('Connect', style: TextStyle(fontSize: 12)),
+                  child: Text(_isConnecting ? 'Connecting...' : 'Connect', style: TextStyle(fontSize: 12)),
                 ),
               if (_loraConnected) ...[  
                 IconButton(
@@ -2102,6 +2103,10 @@ $placemarks  </Document>
   }
 
   void _showConnectionDialog() {
+    setState(() {
+      _isConnecting = true;
+    });
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2117,6 +2122,13 @@ $placemarks  </Document>
               onPressed: () {
                 Navigator.pop(context);
                 _connectUsb();
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (mounted) {
+                    setState(() {
+                      _isConnecting = false;
+                    });
+                  }
+                });
               },
               icon: const Icon(Icons.usb),
               label: const Text('Scan USB Devices'),
@@ -2128,6 +2140,13 @@ $placemarks  </Document>
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.pop(context);
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (mounted) {
+                    setState(() {
+                      _isConnecting = false;
+                    });
+                  }
+                });
                 _connectBluetooth();
               },
               icon: const Icon(Icons.bluetooth),
@@ -2192,7 +2211,7 @@ $placemarks  </Document>
 
   Future<void> _connectBluetooth() async {
     try {
-      _showSnackBar('Scanning for Bluetooth devices...');
+      _showSnackBar('Scanning for Bluetooth devices...', duration: const Duration(seconds: 3));
       final devices = await _locationService.loraCompanion.scanBluetoothDevices();
       
       if (!mounted) return;
