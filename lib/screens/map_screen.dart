@@ -77,7 +77,7 @@ class _MapScreenState extends State<MapScreen> {
   String? _ignoredRepeaterPrefix;
   String? _includeOnlyRepeaters; // Comma-separated list of repeater prefixes to show
   bool _filterEdgesByWhitelist = false; // Whether to apply whitelist to edges
-  double _pingIntervalMeters = 800.0; // Default 0.5 miles
+  double _pingIntervalMeters = 805.0; // Default 0.5 miles
   int _coveragePrecision = 7; // Default precision 6 (~1.2km squares)
   
   // Repeaters
