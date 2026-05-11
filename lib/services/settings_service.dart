@@ -345,7 +345,7 @@ class SettingsService {
   
   Future<int> getPingTimeInterval() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_pingTimeIntervalKey) ?? 20;
+    return prefs.getInt(_pingTimeIntervalKey) ?? 30;
   }
   
   Future<void> setPingTimeInterval(int value) async {

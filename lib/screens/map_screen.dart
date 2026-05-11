@@ -160,7 +160,7 @@ class _MapScreenState extends State<MapScreen> {
   
   // Ping mode
   String _pingMode = 'time';
-  int _pingTimeInterval = 20;
+  int _pingTimeInterval = 30;
   final _random = Random();
   
   // Planned repeater markers
