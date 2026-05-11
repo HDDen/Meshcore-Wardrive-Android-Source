@@ -607,7 +607,7 @@ class LocationService {
         _soundService.playForPingResult(success: true, snr: pingResult.snr, rssi: pingResult.rssi);
 
         final sample = Sample(
-          id: _generateUniqueId(),
+          id: _generateUniqueId(tag: tag),
           position: latLng,
           timestamp: DateTime.now(),
           path: pingResult.nodeId,
@@ -637,7 +637,7 @@ class LocationService {
       if (!anySuccess) {
         _pingEventController.add('failed');
         final failedSample = Sample(
-          id: _generateUniqueId(),
+          id: _generateUniqueId(tag: tag),
           position: latLng,
           timestamp: DateTime.now(),
           geohash: geohash,
@@ -752,7 +752,7 @@ class LocationService {
   String _generateUniqueId({int tag = 0}) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final tagHex = tag.toRadixString(16).padLeft(8, '0');
-    final random = Random().nextInt(999999).toString().padLeft(6, '0');
+    final random = Random().nextInt(999).toString().padLeft(3, '0');
     return '${timestamp}_${tagHex}_$random';
   }
 

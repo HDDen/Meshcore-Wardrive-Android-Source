@@ -2090,7 +2090,7 @@ $placemarks  </Document>
         _currentPosition!.longitude,
       );
       final failedSample = Sample(
-        id: '${DateTime.now().millisecondsSinceEpoch}_$geohash',
+        id: '${DateTime.now().millisecondsSinceEpoch}__${tag.toRadixString(16).padLeft(8, '0')}__$geohash',
         position: _currentPosition!,
         timestamp: DateTime.now(),
         geohash: geohash,
