@@ -25,6 +25,7 @@ class LocationService {
   final SettingsService _settings = SettingsService();
   final DuctingService _ductingService = DuctingService();
   final SoundService _soundService = SoundService();
+  final _random = Random();
   
   LocationService() {
     _carpeaterService = CarpeaterService(_loraCompanion, _settings);
@@ -595,12 +596,12 @@ class LocationService {
       ductingRisk = await _ductingService.getCurrentRisk(DateTime.now());
       if (ductingRisk == DuctingRisk.unknown) ductingRisk = null;
     }
-
+    final tag = _random.nextInt(0xFFFFFFFF);
     bool anySuccess = false;
     await _logger.logPingEvent('Service ID in Background: ${identityHashCode(_loraCompanion)}');
     final subscription = _loraCompanion.pingResults.listen((pingResult) async {
       await _logger.logPingEvent('RECEIVED VIA STREAM!');
-      if (pingResult.status == PingStatus.success) {
+      if ((pingResult.tag == tag) && (pingResult.status == PingStatus.success)) {
         anySuccess = true;
         await _logger.logPingEvent('Response from Node: ${pingResult.nodeId}, RSSI: ${pingResult.rssi}, SNR: ${pingResult.snr}');
         _soundService.playForPingResult(success: true, snr: pingResult.snr, rssi: pingResult.rssi);
@@ -619,7 +620,7 @@ class LocationService {
         );
 
         await _dbService.insertSample(sample);
-        _sampleSavedController.add(null); // Обновляем UI/карту мгновенно
+        _sampleSavedController.add(null);
       }
     });
 
@@ -630,6 +631,7 @@ class LocationService {
         latitude: latLng.latitude,
         longitude: latLng.longitude,
         timeoutSeconds: timeoutSeconds,
+        tag: tag,
       );
       // if no responses
       if (!anySuccess) {
@@ -747,10 +749,11 @@ class LocationService {
   String? get debugLogPath => _logger.logFilePath;
   
   /// Generate a unique ID for samples
-  String _generateUniqueId() {
+  String _generateUniqueId({int tag = 0}) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final tagHex = tag.toRadixString(16).padLeft(8, '0');
     final random = Random().nextInt(999999).toString().padLeft(6, '0');
-    return '${timestamp}_$random';
+    return '${timestamp}_${tagHex}_$random';
   }
 
   /// Start Carpeater discovery and subscribe to results

@@ -24,6 +24,7 @@ class PingResult {
   final double? longitude;
   final String? error;
   final int? responseTimeMs;
+  final int? tag;
 
   PingResult({
     required this.timestamp,
@@ -35,6 +36,7 @@ class PingResult {
     this.longitude,
     this.error,
     this.responseTimeMs,
+    this.tag,
   });
 
   Map<String, dynamic> toJson() => {
@@ -62,7 +64,6 @@ class LoRaCompanionService {
   
   // State
   final _pingResultController = StreamController<PingResult>.broadcast(sync: true);
-  final _pingResultControllerManual = StreamController<PingResult>.broadcast(sync: true);
   final _pendingPings = <int, Completer<PingResult>>{}; // tag -> completer
   final Map<int, Map<String, dynamic>> _pingContexts = {};
   final Map<int, List<Map<String, dynamic>>> _pingResponses = {}; // tag -> list of responses
@@ -108,7 +109,6 @@ class LoRaCompanionService {
   ConnectionType get connectionType => _connectionType;
   String? get deviceName => _deviceName;
   Stream<PingResult> get pingResults => _pingResultController.stream;
-  Stream<PingResult> get pingResultsManual => _pingResultControllerManual.stream;
   int? get batteryPercent => _batteryPercent;
   Stream<int?> get batteryStream => _batteryController.stream;
 
@@ -582,7 +582,7 @@ class LoRaCompanionService {
     double? latitude,
     double? longitude,
     int timeoutSeconds = 30,
-    bool manual = false,
+    int tag = 0,
   }) async {
     if (!isDeviceConnected || latitude == null || longitude == null) {
       _pingResultController.add(PingResult(
@@ -599,7 +599,6 @@ class LoRaCompanionService {
       await _sendBinaryToDevice(zeroHopCmd);
       await Future.delayed(const Duration(milliseconds: 100));
 
-      final tag = _random.nextInt(0xFFFFFFFF);
       final discoveryPayload = _protocol.createDiscoveryRequestPayload(tag, prefixOnly: false);
       final controlCmd = _createCommandForDevice(CMD_SEND_CONTROL_DATA, discoveryPayload);
       await _sendBinaryToDevice(controlCmd);
@@ -611,7 +610,6 @@ class LoRaCompanionService {
         'start': pingSendTime,
         'lat': latitude,
         'lon': longitude,
-        'manual': manual,
         'completer': completer,
       };
 
@@ -845,7 +843,6 @@ class LoRaCompanionService {
           final elapsed = DateTime.now().difference(startTime).inMilliseconds;
           final lat = context['lat'] as double;
           final lon = context['lon'] as double;
-          final manual = context['manual'] as bool;
 
           final instantResult = PingResult(
             status: PingStatus.success,
@@ -856,12 +853,9 @@ class LoRaCompanionService {
             latitude: lat,
             longitude: lon,
             responseTimeMs: elapsed,
+            tag: tag,
           );
-          if (manual) {
-            _pingResultControllerManual.add(instantResult);
-          } else {
-            _pingResultController.add(instantResult);
-          }
+          _pingResultController.add(instantResult);
           _debugLog.logPing('📡 Repeater $pubkeyShort responded (SNR=$snr, RSSI=$rssi)');
         }
         // Note: We don't complete immediately - we wait for timeout to collect all responses
