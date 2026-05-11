@@ -619,7 +619,7 @@ class LocationService {
         );
 
         await _dbService.insertSample(sample);
-        _sampleSavedController.add(null); // Обновляем UI/карту мгновенно
+        _sampleSavedController.add(null);
       }
     });
 
