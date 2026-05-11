@@ -2035,7 +2035,8 @@ $placemarks  </Document>
     // Subscribe
     final subscription = _locationService.loraCompanion.pingResults.listen((result) async {
       final pingSuccess = result.status == PingStatus.success;
-      if ((result.tag == tag) && pingSuccess) {
+      final rTag = result.tag!;
+      if ((rTag == tag) && pingSuccess) {
         responseCount++;
         SoundService().playForPingResult(
           success: pingSuccess,
@@ -2050,7 +2051,7 @@ $placemarks  </Document>
         );
 
         final sample = Sample(
-          id: '${DateTime.now().millisecondsSinceEpoch}_${tag.toRadixString(16).padLeft(8, '0')}_$geohash',
+          id: '${DateTime.now().millisecondsSinceEpoch}_${rTag.toRadixString(16).padLeft(8, '0')}_$geohash',
           position: _currentPosition!,
           timestamp: DateTime.now(),
           path: result.nodeId, // Save repeater/node ID
@@ -2090,7 +2091,7 @@ $placemarks  </Document>
         _currentPosition!.longitude,
       );
       final failedSample = Sample(
-        id: '${DateTime.now().millisecondsSinceEpoch}__${tag.toRadixString(16).padLeft(8, '0')}__$geohash',
+        id: '${DateTime.now().millisecondsSinceEpoch}_${tag.toRadixString(16).padLeft(8, '0')}_$geohash',
         position: _currentPosition!,
         timestamp: DateTime.now(),
         geohash: geohash,
