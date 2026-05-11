@@ -4013,8 +4013,8 @@ $placemarks  </Document>
     final lostDisplay = coverage.lost.toStringAsFixed(1);
     final totalDisplay = total.toStringAsFixed(1);
     
-    // Get unique repeater prefixes (first 2 chars)
-    final uniquePrefixes = coverage.repeaters.map((id) => id.substring(0, id.length >= 2 ? 2 : id.length)).toSet().toList()..sort();
+    // Get unique repeater prefixes (first 4 chars)
+    final uniquePrefixes = coverage.repeaters.map((id) => id.substring(0, id.length >= 4 ? 4 : id.length)).toSet().toList()..sort();
     final repeaterText = uniquePrefixes.isNotEmpty ? uniquePrefixes.join(', ') : 'None';
     
     showDialog(
