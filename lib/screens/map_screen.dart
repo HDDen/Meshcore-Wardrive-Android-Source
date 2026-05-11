@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -160,6 +161,7 @@ class _MapScreenState extends State<MapScreen> {
   // Ping mode
   String _pingMode = 'distance';
   int _pingTimeInterval = 60;
+  final _random = Random();
   
   // Planned repeater markers
   List<Map<String, dynamic>> _plannedMarkers = [];
@@ -2029,11 +2031,11 @@ $placemarks  </Document>
     SoundService().playPingSent();
 
     int responseCount = 0;
-
+    final tag = _random.nextInt(0xFFFFFFFF);
     // Subscribe
-    final subscription = _locationService.loraCompanion.pingResultsManual.listen((result) async {
+    final subscription = _locationService.loraCompanion.pingResults.listen((result) async {
       final pingSuccess = result.status == PingStatus.success;
-      if (pingSuccess) {
+      if ((result.tag == tag) && pingSuccess) {
         responseCount++;
         SoundService().playForPingResult(
           success: pingSuccess,
@@ -2048,7 +2050,7 @@ $placemarks  </Document>
         );
 
         final sample = Sample(
-          id: '${DateTime.now().millisecondsSinceEpoch}_$geohash',
+          id: '${DateTime.now().millisecondsSinceEpoch}_${tag.toRadixString(16).padLeft(8, '0')}_$geohash',
           position: _currentPosition!,
           timestamp: DateTime.now(),
           path: result.nodeId, // Save repeater/node ID
@@ -2072,7 +2074,7 @@ $placemarks  </Document>
         latitude: _currentPosition!.latitude,
         longitude: _currentPosition!.longitude,
         timeoutSeconds: 10,
-        manual: true,
+        tag: tag,
       );
     } finally {
       await subscription.cancel();
