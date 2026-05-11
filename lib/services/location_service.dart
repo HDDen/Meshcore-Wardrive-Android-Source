@@ -601,13 +601,14 @@ class LocationService {
     await _logger.logPingEvent('Service ID in Background: ${identityHashCode(_loraCompanion)}');
     final subscription = _loraCompanion.pingResults.listen((pingResult) async {
       await _logger.logPingEvent('RECEIVED VIA STREAM!');
-      if ((pingResult.tag == tag) && (pingResult.status == PingStatus.success)) {
+      final rTag = pingResult.tag!;
+      if ((rTag == tag) && (pingResult.status == PingStatus.success)) {
         anySuccess = true;
         await _logger.logPingEvent('Response from Node: ${pingResult.nodeId}, RSSI: ${pingResult.rssi}, SNR: ${pingResult.snr}');
         _soundService.playForPingResult(success: true, snr: pingResult.snr, rssi: pingResult.rssi);
 
         final sample = Sample(
-          id: _generateUniqueId(tag: tag),
+          id: _generateUniqueId(tag: rTag),
           position: latLng,
           timestamp: DateTime.now(),
           path: pingResult.nodeId,
