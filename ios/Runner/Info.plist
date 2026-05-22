@@ -30,6 +30,11 @@
 	<string>MeshCore Wardrive uses background location while tracking to collect coverage samples during a drive.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>MeshCore Wardrive uses background location while tracking to collect coverage samples during a drive.</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>WardrivePreciseLocation</key>
+		<string>Precise location is needed to place LoRa coverage samples accurately on the map.</string>
+	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>MeshCore Wardrive uses Bluetooth to connect to MeshCore LoRa companion devices.</string>
 	<key>UIBackgroundModes</key>

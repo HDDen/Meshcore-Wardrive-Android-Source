@@ -19,6 +19,8 @@ import 'carpeater_service.dart';
 import 'sound_service.dart';
 
 class LocationService {
+  static const String _preciseLocationPurposeKey = 'WardrivePreciseLocation';
+
   final DatabaseService _dbService = DatabaseService();
   final LoRaCompanionService _loraCompanion = LoRaCompanionService();
   final PersistentDebugLogger _logger = PersistentDebugLogger();
@@ -172,7 +174,29 @@ class LocationService {
       return false;
     }
 
+    await _requestPreciseLocationIfNeeded();
     return true;
+  }
+
+  Future<void> _requestPreciseLocationIfNeeded() async {
+    if (!Platform.isIOS) return;
+
+    try {
+      final accuracy = await Geolocator.getLocationAccuracy();
+      await _logger.logPermission('Location accuracy', accuracy.name);
+
+      if (accuracy == LocationAccuracyStatus.reduced) {
+        final updatedAccuracy = await Geolocator.requestTemporaryFullAccuracy(
+          purposeKey: _preciseLocationPurposeKey,
+        );
+        await _logger.logPermission(
+          'Location accuracy after request',
+          updatedAccuracy.name,
+        );
+      }
+    } catch (e) {
+      await _logger.logError('Location accuracy', e.toString());
+    }
   }
 
   /// Check if location services are enabled
