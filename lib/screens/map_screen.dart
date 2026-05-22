@@ -384,6 +384,23 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<LatLng?> _ensureCurrentPosition() async {
+    if (_currentPosition != null) return _currentPosition;
+
+    _showSnackBar('Getting GPS location...');
+    final pos = await _locationService.getCurrentPosition();
+    if (pos == null) return null;
+
+    if (mounted) {
+      setState(() {
+        _currentPosition = pos;
+      });
+    } else {
+      _currentPosition = pos;
+    }
+    return pos;
+  }
+
   Future<void> _loadSamples() async {
     final count = await _locationService.getSampleCount();
     final loraService = _locationService.loraCompanion;
@@ -2224,7 +2241,8 @@ $placemarks  </Document>
       return;
     }
 
-    if (_currentPosition == null) {
+    final pingPosition = await _ensureCurrentPosition();
+    if (pingPosition == null) {
       _showSnackBar('Waiting for GPS location...');
       return;
     }
@@ -2250,13 +2268,13 @@ $placemarks  </Document>
 
         // Create and save sample
         final geohash = GeohashUtils.sampleKey(
-          _currentPosition!.latitude,
-          _currentPosition!.longitude,
+          pingPosition.latitude,
+          pingPosition.longitude,
         );
 
         final sample = Sample(
           id: '${DateTime.now().millisecondsSinceEpoch}_${rTag.toRadixString(16).padLeft(8, '0')}_$geohash',
-          position: _currentPosition!,
+          position: pingPosition,
           timestamp: DateTime.now(),
           path: result.nodeId, // Save repeater/node ID
           geohash: geohash,
@@ -2278,8 +2296,8 @@ $placemarks  </Document>
     try {
       // Waiting for timeout
       await _locationService.loraCompanion.ping(
-        latitude: _currentPosition!.latitude,
-        longitude: _currentPosition!.longitude,
+        latitude: pingPosition.latitude,
+        longitude: pingPosition.longitude,
         timeoutSeconds: 10,
         tag: tag,
       );
@@ -2293,12 +2311,12 @@ $placemarks  </Document>
       _showSnackBar('✅ Discovery complete: Found $responseCount repeater(s)');
     } else {
       final geohash = GeohashUtils.sampleKey(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
+        pingPosition.latitude,
+        pingPosition.longitude,
       );
       final failedSample = Sample(
         id: '${DateTime.now().millisecondsSinceEpoch}_${tag.toRadixString(16).padLeft(8, '0')}_$geohash',
-        position: _currentPosition!,
+        position: pingPosition,
         timestamp: DateTime.now(),
         geohash: geohash,
         pingSuccess: false,

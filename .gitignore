@@ -53,3 +53,4 @@ android/key.properties
 *.keystore
 __build-android
 __build-windows
+__build-ios
