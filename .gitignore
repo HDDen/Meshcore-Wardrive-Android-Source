@@ -46,3 +46,10 @@ app.*.map.json
 
 # Release APKs
 *.apk
+
+# Android signing secrets
+android/key.properties
+*.jks
+*.keystore
+__build-android
+__build-windows

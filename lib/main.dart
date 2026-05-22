@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/database_factory_initializer.dart';
 import 'screens/map_screen.dart';
 
 void main() {
   // Lock to portrait mode (true north)
   WidgetsFlutterBinding.ensureInitialized();
+  initializeDatabaseFactory();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,

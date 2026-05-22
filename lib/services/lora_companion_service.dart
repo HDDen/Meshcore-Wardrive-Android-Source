@@ -145,7 +145,7 @@ class LoRaCompanionService {
 
   /// Scan for Bluetooth LoRa devices
   Future<List<BluetoothDevice>> scanBluetoothDevices({
-    Duration timeout = const Duration(seconds: 3),
+    Duration timeout = const Duration(seconds: 5),
   }) async {
     final devices = <BluetoothDevice>[];
     
@@ -154,18 +154,14 @@ class LoRaCompanionService {
         throw Exception('Bluetooth not supported');
       }
 
-      await FlutterBluePlus.startScan(timeout: timeout);
-
       final subscription = FlutterBluePlus.scanResults.listen((results) {
         for (ScanResult r in results) {
-          // Look for LoRa/Meshtastic/WhisperOS devices
-          final name = r.device.platformName.toLowerCase();
-          if (name.contains('lora') ||
-              name.contains('meshtastic') ||
-              name.contains('meshcore') ||
-              name.contains('whisper') ||
-              name.contains('t-beam') ||
-              name.contains('heltec')) {
+          _debugLog.logInfo(
+            'BLE scan: name="${r.device.platformName}", adv="${r.advertisementData.advName}", '
+            'services=${r.advertisementData.serviceUuids.join(', ')}, rssi=${r.rssi}',
+          );
+
+          if (_isLikelyLoRaBluetoothDevice(r)) {
             if (!devices.contains(r.device)) {
               devices.add(r.device);
             }
@@ -173,6 +169,7 @@ class LoRaCompanionService {
         }
       });
 
+      await FlutterBluePlus.startScan(timeout: timeout);
       await Future.delayed(timeout);
       await subscription.cancel();
       await FlutterBluePlus.stopScan();
@@ -184,10 +181,35 @@ class LoRaCompanionService {
     }
   }
 
+  bool _isLikelyLoRaBluetoothDevice(ScanResult result) {
+    final names = [
+      result.device.platformName,
+      result.advertisementData.advName,
+    ].where((name) => name.isNotEmpty).map((name) => name.toLowerCase());
+
+    final hasKnownName = names.any((name) =>
+        name.contains('lora') ||
+        name.contains('meshtastic') ||
+        name.contains('meshcore') ||
+        name.contains('whisper') ||
+        name.contains('t-beam') ||
+        name.contains('heltec'));
+
+    if (hasKnownName) return true;
+
+    return result.advertisementData.serviceUuids.any((uuid) {
+      final value = uuid.toString().toLowerCase();
+      return value.contains('6e40') || value.contains('ffe0');
+    });
+  }
+
   /// Connect to LoRa device via Bluetooth
   Future<bool> connectBluetooth(BluetoothDevice device) async {
     try {
-      await device.connect(timeout: const Duration(seconds: 15));
+      await device.connect(
+        license: License.free,
+        timeout: const Duration(seconds: 15),
+      );
       _bluetoothDevice = device;
 
       List<BluetoothService> services = await device.discoverServices();
