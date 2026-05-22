@@ -28,19 +28,19 @@ class Sample {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'lat': position.latitude,
-        'lon': position.longitude,
-        'timestamp': timestamp.toIso8601String(),
-        'path': path,
-        'geohash': geohash,
-        'rssi': rssi,
-        'snr': snr,
-        'pingSuccess': pingSuccess,
-        'responseTimeMs': responseTimeMs,
-        'ductingRisk': ductingRisk,
-        'source': source,
-      };
+    'id': id,
+    'lat': position.latitude,
+    'lon': position.longitude,
+    'timestamp': timestamp.toIso8601String(),
+    'path': path,
+    'geohash': geohash,
+    'rssi': rssi,
+    'snr': snr,
+    'pingSuccess': pingSuccess,
+    'responseTimeMs': responseTimeMs,
+    'ductingRisk': ductingRisk,
+    'source': source,
+  };
 
   factory Sample.fromJson(Map<String, dynamic> json) {
     return Sample(
@@ -62,19 +62,19 @@ class Sample {
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'lat': position.latitude,
-        'lon': position.longitude,
-        'timestamp': timestamp.millisecondsSinceEpoch,
-        'path': path,
-        'geohash': geohash,
-        'rssi': rssi,
-        'snr': snr,
-        'pingSuccess': pingSuccess == true ? 1 : (pingSuccess == false ? 0 : null),
-        'response_time_ms': responseTimeMs,
-        'ducting_risk': ductingRisk,
-        'source': source,
-      };
+    'id': id,
+    'lat': position.latitude,
+    'lon': position.longitude,
+    'timestamp': timestamp.millisecondsSinceEpoch,
+    'path': path,
+    'geohash': geohash,
+    'rssi': rssi,
+    'snr': snr,
+    'pingSuccess': pingSuccess == true ? 1 : (pingSuccess == false ? 0 : null),
+    'response_time_ms': responseTimeMs,
+    'ducting_risk': ductingRisk,
+    'source': source,
+  };
 
   factory Sample.fromMap(Map<String, dynamic> map) {
     final pingSuccessInt = map['pingSuccess'] as int?;
@@ -98,7 +98,7 @@ class Coverage {
   final String id; // geohash
   final LatLng position;
   double received; // Changed to double to support weighted samples
-  double lost;     // Changed to double to support weighted samples
+  double lost; // Changed to double to support weighted samples
   DateTime? lastReceived;
   DateTime? updated;
   List<String> repeaters;
@@ -114,15 +114,15 @@ class Coverage {
   }) : repeaters = repeaters ?? [];
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'lat': position.latitude,
-        'lon': position.longitude,
-        'rcv': received,
-        'lost': lost,
-        'lht': lastReceived?.millisecondsSinceEpoch,
-        'ut': updated?.millisecondsSinceEpoch,
-        'rptr': repeaters,
-      };
+    'id': id,
+    'lat': position.latitude,
+    'lon': position.longitude,
+    'rcv': received,
+    'lost': lost,
+    'lht': lastReceived?.millisecondsSinceEpoch,
+    'ut': updated?.millisecondsSinceEpoch,
+    'rptr': repeaters,
+  };
 
   factory Coverage.fromJson(Map<String, dynamic> json) {
     return Coverage(
@@ -163,16 +163,16 @@ class Repeater {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'lat': position.latitude,
-        'lon': position.longitude,
-        'elevation': elevation,
-        'timestamp': timestamp?.toIso8601String(),
-        'name': name,
-        'rssi': rssi,
-        'snr': snr,
-        'distance': distance,
-      };
+    'id': id,
+    'lat': position.latitude,
+    'lon': position.longitude,
+    'elevation': elevation,
+    'timestamp': timestamp?.toIso8601String(),
+    'name': name,
+    'rssi': rssi,
+    'snr': snr,
+    'distance': distance,
+  };
 
   factory Repeater.fromJson(Map<String, dynamic> json) {
     return Repeater(
@@ -194,10 +194,7 @@ class Edge {
   final Coverage coverage;
   final Repeater repeater;
 
-  Edge({
-    required this.coverage,
-    required this.repeater,
-  });
+  Edge({required this.coverage, required this.repeater});
 }
 
 class WSession {
@@ -222,18 +219,18 @@ class WSession {
   });
 
   Duration? get duration => endTime?.difference(startTime);
-  
+
   double get successRate => pingCount > 0 ? successCount / pingCount : 0.0;
 
   Map<String, dynamic> toJson() => {
-        'startTime': startTime.toIso8601String(),
-        'endTime': endTime?.toIso8601String(),
-        'distanceMeters': distanceMeters,
-        'sampleCount': sampleCount,
-        'pingCount': pingCount,
-        'successCount': successCount,
-        'notes': notes,
-      };
+    'startTime': startTime.toIso8601String(),
+    'endTime': endTime?.toIso8601String(),
+    'distanceMeters': distanceMeters,
+    'sampleCount': sampleCount,
+    'pingCount': pingCount,
+    'successCount': successCount,
+    'notes': notes,
+  };
 
   factory WSession.fromJson(Map<String, dynamic> json) {
     return WSession(
@@ -250,15 +247,15 @@ class WSession {
   }
 
   Map<String, dynamic> toMap() => {
-        if (id != null) 'id': id,
-        'start_time': startTime.millisecondsSinceEpoch,
-        'end_time': endTime?.millisecondsSinceEpoch,
-        'distance_meters': distanceMeters,
-        'sample_count': sampleCount,
-        'ping_count': pingCount,
-        'success_count': successCount,
-        'notes': notes,
-      };
+    if (id != null) 'id': id,
+    'start_time': startTime.millisecondsSinceEpoch,
+    'end_time': endTime?.millisecondsSinceEpoch,
+    'distance_meters': distanceMeters,
+    'sample_count': sampleCount,
+    'ping_count': pingCount,
+    'success_count': successCount,
+    'notes': notes,
+  };
 
   factory WSession.fromMap(Map<String, dynamic> map) {
     return WSession(
@@ -280,22 +277,20 @@ class NodeData {
   final List<Sample> samples;
   final List<Repeater> repeaters;
 
-  NodeData({
-    required this.samples,
-    required this.repeaters,
-  });
+  NodeData({required this.samples, required this.repeaters});
 
   factory NodeData.fromJson(Map<String, dynamic> json) {
     return NodeData(
-      samples: (json['samples'] as List<dynamic>?)
+      samples:
+          (json['samples'] as List<dynamic>?)
               ?.map((s) => Sample.fromJson(s as Map<String, dynamic>))
               .toList() ??
           [],
-      repeaters: (json['repeaters'] as List<dynamic>?)
+      repeaters:
+          (json['repeaters'] as List<dynamic>?)
               ?.map((r) => Repeater.fromJson(r as Map<String, dynamic>))
               .toList() ??
           [],
     );
   }
 }
-

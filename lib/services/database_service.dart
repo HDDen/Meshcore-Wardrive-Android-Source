@@ -62,7 +62,7 @@ class DatabaseService {
     await db.execute('''
       CREATE INDEX idx_samples_timestamp ON $tableSamples (timestamp)
     ''');
-    
+
     // Create ducting cache table
     await db.execute('''
       CREATE TABLE $tableDuctingCache (
@@ -80,7 +80,7 @@ class DatabaseService {
     await db.execute('''
       CREATE INDEX idx_ducting_timestamp ON $tableDuctingCache (timestamp)
     ''');
-    
+
     // Create uploads tracking table (per-endpoint upload tracking)
     await db.execute('''
       CREATE TABLE $tableUploads (
@@ -90,12 +90,12 @@ class DatabaseService {
         PRIMARY KEY (sample_id, endpoint_url)
       )
     ''');
-    
+
     // Create index on endpoint_url for faster queries
     await db.execute('''
       CREATE INDEX idx_uploads_endpoint ON $tableUploads (endpoint_url)
     ''');
-    
+
     // Create sessions table
     await db.execute('''
       CREATE TABLE $tableSessions (
@@ -109,7 +109,7 @@ class DatabaseService {
         notes TEXT
       )
     ''');
-    
+
     // Create planned markers table
     await db.execute('''
       CREATE TABLE $tableMarkers (
@@ -127,15 +127,21 @@ class DatabaseService {
       // Add new columns for ping data
       await db.execute('ALTER TABLE $tableSamples ADD COLUMN rssi INTEGER');
       await db.execute('ALTER TABLE $tableSamples ADD COLUMN snr INTEGER');
-      await db.execute('ALTER TABLE $tableSamples ADD COLUMN pingSuccess INTEGER');
+      await db.execute(
+        'ALTER TABLE $tableSamples ADD COLUMN pingSuccess INTEGER',
+      );
     }
     if (oldVersion < 3) {
       // Add observer names column
-      await db.execute('ALTER TABLE $tableSamples ADD COLUMN observerNames TEXT');
+      await db.execute(
+        'ALTER TABLE $tableSamples ADD COLUMN observerNames TEXT',
+      );
     }
     if (oldVersion < 4) {
       // Add uploaded tracking column
-      await db.execute('ALTER TABLE $tableSamples ADD COLUMN uploaded INTEGER DEFAULT 0');
+      await db.execute(
+        'ALTER TABLE $tableSamples ADD COLUMN uploaded INTEGER DEFAULT 0',
+      );
     }
     if (oldVersion < 5) {
       // Create uploads tracking table for per-endpoint upload tracking
@@ -147,17 +153,20 @@ class DatabaseService {
           PRIMARY KEY (sample_id, endpoint_url)
         )
       ''');
-      
+
       await db.execute('''
         CREATE INDEX idx_uploads_endpoint ON $tableUploads (endpoint_url)
       ''');
-      
+
       // Migrate existing uploaded samples to new table (assume default endpoint)
-      await db.execute('''
+      await db.execute(
+        '''
         INSERT INTO $tableUploads (sample_id, endpoint_url, uploaded_at)
         SELECT id, 'https://meshwar-map.pages.dev/api/samples', ?
         FROM $tableSamples WHERE uploaded = 1
-      ''', [DateTime.now().millisecondsSinceEpoch]);
+      ''',
+        [DateTime.now().millisecondsSinceEpoch],
+      );
     }
     if (oldVersion < 6) {
       await db.execute('''
@@ -174,10 +183,14 @@ class DatabaseService {
       ''');
     }
     if (oldVersion < 7) {
-      await db.execute('ALTER TABLE $tableSamples ADD COLUMN response_time_ms INTEGER');
+      await db.execute(
+        'ALTER TABLE $tableSamples ADD COLUMN response_time_ms INTEGER',
+      );
     }
     if (oldVersion < 8) {
-      await db.execute('ALTER TABLE $tableSamples ADD COLUMN ducting_risk TEXT');
+      await db.execute(
+        'ALTER TABLE $tableSamples ADD COLUMN ducting_risk TEXT',
+      );
       await db.execute('''
         CREATE TABLE $tableDuctingCache (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -197,7 +210,9 @@ class DatabaseService {
     }
     if (oldVersion < 9) {
       await db.execute('ALTER TABLE $tableSamples ADD COLUMN source TEXT');
-      await db.execute('CREATE INDEX idx_samples_source ON $tableSamples (source)');
+      await db.execute(
+        'CREATE INDEX idx_samples_source ON $tableSamples (source)',
+      );
     }
     if (oldVersion < 10) {
       await db.execute('''
@@ -302,44 +317,50 @@ class DatabaseService {
     }
     await batch.commit(noResult: true);
   }
-  
+
   /// Mark samples as uploaded to a specific endpoint
-  Future<void> markSamplesAsUploadedToEndpoint(List<String> sampleIds, String endpointUrl) async {
+  Future<void> markSamplesAsUploadedToEndpoint(
+    List<String> sampleIds,
+    String endpointUrl,
+  ) async {
     final db = await database;
     final batch = db.batch();
     final now = DateTime.now().millisecondsSinceEpoch;
-    
+
     for (final id in sampleIds) {
-      batch.insert(
-        tableUploads,
-        {
-          'sample_id': id,
-          'endpoint_url': endpointUrl,
-          'uploaded_at': now,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      batch.insert(tableUploads, {
+        'sample_id': id,
+        'endpoint_url': endpointUrl,
+        'uploaded_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);
   }
-  
+
   /// Get samples that haven't been uploaded to a specific endpoint
-  Future<List<Sample>> getUnuploadedSamplesForEndpoint(String endpointUrl) async {
+  Future<List<Sample>> getUnuploadedSamplesForEndpoint(
+    String endpointUrl,
+  ) async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    final List<Map<String, dynamic>> maps = await db.rawQuery(
+      '''
       SELECT s.* FROM $tableSamples s
       LEFT JOIN $tableUploads u ON s.id = u.sample_id AND u.endpoint_url = ?
       WHERE u.sample_id IS NULL
       ORDER BY s.timestamp DESC
-    ''', [endpointUrl]);
-    
+    ''',
+      [endpointUrl],
+    );
+
     return maps.map((map) => Sample.fromMap(map)).toList();
   }
 
   /// Get count of unuploaded samples
   Future<int> getUnuploadedSampleCount() async {
     final db = await database;
-    final result = await db.rawQuery('SELECT COUNT(*) FROM $tableSamples WHERE uploaded = 0');
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) FROM $tableSamples WHERE uploaded = 0',
+    );
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
@@ -384,7 +405,7 @@ class DatabaseService {
     final samples = await getAllSamples();
     return samples.map((s) => s.toJson()).toList();
   }
-  
+
   /// Export all data (samples + sessions) as a unified JSON map
   Future<Map<String, dynamic>> exportAllData() async {
     final samples = await getAllSamples();
@@ -396,19 +417,21 @@ class DatabaseService {
       'sessions': sessions.map((s) => s.toJson()).toList(),
     };
   }
-  
+
   /// Import data from unified format (samples + sessions).
   /// Also handles legacy format (plain sample array).
   /// Returns {samples: imported, sessions: imported}.
   Future<Map<String, int>> importAllData(dynamic jsonData) async {
     List<Map<String, dynamic>> samplesList;
     List<Map<String, dynamic>> sessionsList = [];
-    
+
     if (jsonData is Map<String, dynamic> && jsonData.containsKey('samples')) {
       // New unified format
-      samplesList = (jsonData['samples'] as List<dynamic>).cast<Map<String, dynamic>>();
+      samplesList = (jsonData['samples'] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
       if (jsonData.containsKey('sessions')) {
-        sessionsList = (jsonData['sessions'] as List<dynamic>).cast<Map<String, dynamic>>();
+        sessionsList = (jsonData['sessions'] as List<dynamic>)
+            .cast<Map<String, dynamic>>();
       }
     } else if (jsonData is List) {
       // Legacy format: plain array of samples
@@ -416,10 +439,10 @@ class DatabaseService {
     } else {
       throw const FormatException('Unrecognized export format');
     }
-    
+
     // Import samples
     final samplesImported = await importSamples(samplesList);
-    
+
     // Import sessions (skip duplicates by start_time)
     int sessionsImported = 0;
     if (sessionsList.isNotEmpty) {
@@ -443,7 +466,7 @@ class DatabaseService {
         }
       }
     }
-    
+
     return {'samples': samplesImported, 'sessions': sessionsImported};
   }
 
@@ -451,11 +474,11 @@ class DatabaseService {
   Future<int> importSamples(List<Map<String, dynamic>> jsonData) async {
     final db = await database;
     int importedCount = 0;
-    
+
     for (final json in jsonData) {
       try {
         final sample = Sample.fromJson(json);
-        
+
         // Check if sample with this ID already exists
         final existing = await db.query(
           tableSamples,
@@ -463,7 +486,7 @@ class DatabaseService {
           whereArgs: [sample.id],
           limit: 1,
         );
-        
+
         if (existing.isEmpty) {
           await db.insert(
             tableSamples,
@@ -477,7 +500,7 @@ class DatabaseService {
         // Skip invalid samples
       }
     }
-    
+
     return importedCount;
   }
 
@@ -486,7 +509,7 @@ class DatabaseService {
     final db = await database;
     return await db.insert(tableSessions, session.toMap());
   }
-  
+
   /// Update an existing session
   Future<void> updateSession(WSession session) async {
     final db = await database;
@@ -497,29 +520,29 @@ class DatabaseService {
       whereArgs: [session.id],
     );
   }
-  
+
   /// Get all sessions, newest first
   Future<List<WSession>> getAllSessions() async {
     final db = await database;
-    final maps = await db.query(
-      tableSessions,
-      orderBy: 'start_time DESC',
-    );
+    final maps = await db.query(tableSessions, orderBy: 'start_time DESC');
     return maps.map((m) => WSession.fromMap(m)).toList();
   }
-  
+
   /// Delete a session by ID
   Future<void> deleteSession(int id) async {
     final db = await database;
     await db.delete(tableSessions, where: 'id = ?', whereArgs: [id]);
   }
-  
+
   /// Get sample counts for a session's time range
-  Future<Map<String, int>> getSessionSampleCounts(DateTime start, DateTime end) async {
+  Future<Map<String, int>> getSessionSampleCounts(
+    DateTime start,
+    DateTime end,
+  ) async {
     final db = await database;
     final startMs = start.millisecondsSinceEpoch;
     final endMs = end.millisecondsSinceEpoch;
-    
+
     final totalResult = await db.rawQuery(
       'SELECT COUNT(*) FROM $tableSamples WHERE timestamp >= ? AND timestamp <= ?',
       [startMs, endMs],
@@ -532,7 +555,7 @@ class DatabaseService {
       'SELECT COUNT(*) FROM $tableSamples WHERE timestamp >= ? AND timestamp <= ? AND pingSuccess = 1',
       [startMs, endMs],
     );
-    
+
     return {
       'total': Sqflite.firstIntValue(totalResult) ?? 0,
       'pings': Sqflite.firstIntValue(pingResult) ?? 0,
@@ -548,7 +571,7 @@ class DatabaseService {
     );
     return results.map((r) => r['source'] as String).toList();
   }
-  
+
   /// Get samples filtered by source
   Future<List<Sample>> getSamplesBySource(String source) async {
     final db = await database;
@@ -564,7 +587,7 @@ class DatabaseService {
   // ============================================================================
   // PLANNED MARKERS
   // ============================================================================
-  
+
   /// Add a planned repeater marker
   Future<int> addMarker(double lat, double lon, String? label) async {
     final db = await database;
@@ -575,35 +598,40 @@ class DatabaseService {
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
   }
-  
+
   /// Get all planned markers
   Future<List<Map<String, dynamic>>> getAllMarkers() async {
     final db = await database;
     return await db.query(tableMarkers, orderBy: 'created_at DESC');
   }
-  
+
   /// Delete a planned marker by ID
   Future<void> deleteMarker(int id) async {
     final db = await database;
     await db.delete(tableMarkers, where: 'id = ?', whereArgs: [id]);
   }
-  
+
   /// Update a marker's label
   Future<void> updateMarkerLabel(int id, String? label) async {
     final db = await database;
-    await db.update(tableMarkers, {'label': label}, where: 'id = ?', whereArgs: [id]);
+    await db.update(
+      tableMarkers,
+      {'label': label},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
-  
+
   // ============================================================================
   // DELETE DATA
   // ============================================================================
-  
+
   /// Delete a single sample by ID
   Future<void> deleteSample(String sampleId) async {
     final db = await database;
     await db.delete(tableSamples, where: 'id = ?', whereArgs: [sampleId]);
   }
-  
+
   /// Delete all samples in a coverage cell (by geohash prefix)
   /// Uses the coverage precision to match the cell
   Future<int> deleteSamplesByGeohash(String geohashPrefix) async {

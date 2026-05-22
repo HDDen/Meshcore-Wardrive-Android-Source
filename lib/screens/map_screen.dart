@@ -53,19 +53,19 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   // App version is imported from constants/app_version.dart
-  
+
   final LocationService _locationService = LocationService();
   final MapController _mapController = MapController();
   final UploadService _uploadService = UploadService();
   final SettingsService _settingsService = SettingsService();
   final ScreenshotController _screenshotController = ScreenshotController();
-  
+
   bool _isTracking = false;
   bool _isConnecting = false;
   int _sampleCount = 0;
   List<Sample> _samples = [];
   AggregationResult? _aggregationResult;
-  
+
   String _colorMode = 'quality';
   bool _showSamples = false;
   bool _showGpsSamples = true; // Show GPS-only samples (null pingSuccess)
@@ -75,14 +75,15 @@ class _MapScreenState extends State<MapScreen> {
   bool _showRepeaters = true;
   bool _autoPingEnabled = false;
   String? _ignoredRepeaterPrefix;
-  String? _includeOnlyRepeaters; // Comma-separated list of repeater prefixes to show
+  String?
+  _includeOnlyRepeaters; // Comma-separated list of repeater prefixes to show
   bool _filterEdgesByWhitelist = false; // Whether to apply whitelist to edges
   double _pingIntervalMeters = 805.0; // Default 0.5 miles
   int _coveragePrecision = 7; // Default precision 6 (~1.2km squares)
-  
+
   // Repeaters
   List<Repeater> _repeaters = [];
-  
+
   LatLng? _currentPosition;
   Timer? _updateTimer;
   StreamSubscription<LatLng>? _positionSubscription;
@@ -90,85 +91,86 @@ class _MapScreenState extends State<MapScreen> {
   StreamSubscription<String>? _pingEventSubscription;
   StreamSubscription<double>? _distanceSubscription;
   StreamSubscription<double>? _speedSubscription;
-  
+
   // Ping visual indicator
   bool _showPingPulse = false;
-  
+
   // Distance tracking
   double _totalDistance = 0.0;
   double _currentSpeed = 0.0;
   String _distanceUnit = 'km';
-  
+
   // Color blind mode
   String _colorBlindMode = 'normal';
-  
+
   // Discovery timeout (10-30 seconds)
   int _discoveryTimeoutSeconds = 10;
-  
+
   // Fuel unit ('imperial' for MPG/gal, 'metric' for L/100km/L)
   String _fuelUnit = 'metric';
-  
+
   // Screenshot mode - hide UI elements
   bool _hideUIForScreenshot = false;
-  
+
   // LoRa connection status
   bool _loraConnected = false;
   ConnectionType _connectionType = ConnectionType.none;
   int? _batteryPercent;
   StreamSubscription<int?>? _batterySubscription;
-  
+
   // Auto-follow GPS location
   bool _followLocation = false;
-  
+
   // Map rotation lock
   bool _lockRotationNorth = false;
-  
+
   // Route trail
   bool _showRouteTrail = false;
-  
+
   // Session filter
   WSession? _activeSessionFilter;
-  
+
   // Offline tile cache
   CacheStore? _tileCacheStore;
-  
+
   // Heatmap
   bool _showHeatmap = false;
-  final StreamController<void> _heatmapRebuildStream = StreamController.broadcast();
-  
+  final StreamController<void> _heatmapRebuildStream =
+      StreamController.broadcast();
+
   // Aggregation cache - skip recomputation when nothing changed
   int _lastAggregatedSampleCount = -1;
   int _lastAggregatedRepeaterCount = -1;
-  
+
   // Source filter for multi-device wardrive
   String? _activeSourceFilter;
-  
+
   // Auto-follow throttle
   DateTime _lastAutoFollowMove = DateTime.now();
   static const _autoFollowInterval = Duration(seconds: 2);
-  
+
   // Coverage prediction rings
   bool _showPredictionRings = false;
-  
+
   // Atmospheric ducting
   bool _showDucting = false;
   String _currentDuctingRisk = DuctingRisk.unknown;
-  
+
   // Sound & vibration feedback
   bool _soundEnabled = false;
   bool _vibrationEnabled = false;
-  
+
   // Ping mode
   String _pingMode = 'time';
   int _pingTimeInterval = 30;
   final _random = Random();
-  
+
   // Planned repeater markers
   List<Map<String, dynamic>> _plannedMarkers = [];
-  
+
   // Delete mode
   bool _deleteMode = false;
-  
+
   // Carpeater mode
   bool _carpeaterEnabled = false;
   String? _carpeaterRepeaterId;
@@ -187,16 +189,16 @@ class _MapScreenState extends State<MapScreen> {
     // Initialize tile cache store
     final cacheDir = await getApplicationDocumentsDirectory();
     _tileCacheStore = FileCacheStore('${cacheDir.path}/tile_cache');
-    
+
     // Initialize home screen widget
     await WidgetService.initialize();
-    
+
     // Load saved settings
     await _loadSettings();
-    
+
     // Load planned markers
     await _loadMarkers();
-    
+
     // Subscribe to battery updates
     final loraService = _locationService.loraCompanion;
     _batterySubscription = loraService.batteryStream.listen((percent) {
@@ -204,17 +206,23 @@ class _MapScreenState extends State<MapScreen> {
         _batteryPercent = percent;
       });
     });
-    
+
     // Subscribe to Carpeater state changes
-    _carpeaterStateSubscription = _locationService.carpeaterService.stateStream.listen((state) {
-      if (mounted) setState(() { _carpeaterState = state; });
-    });
-    
+    _carpeaterStateSubscription = _locationService.carpeaterService.stateStream
+        .listen((state) {
+          if (mounted)
+            setState(() {
+              _carpeaterState = state;
+            });
+        });
+
     // Subscribe to position updates
-    _positionSubscription = _locationService.currentPositionStream.listen((position) {
+    _positionSubscription = _locationService.currentPositionStream.listen((
+      position,
+    ) {
       if (!mounted) return;
       _currentPosition = position;
-      
+
       // Auto-follow if enabled (throttled to reduce map redraws)
       if (_followLocation && position != null) {
         final now = DateTime.now();
@@ -224,12 +232,12 @@ class _MapScreenState extends State<MapScreen> {
         }
       }
     });
-    
+
     // Subscribe to sample saved events - reload map when new samples are saved
     _sampleSavedSubscription = _locationService.sampleSavedStream.listen((_) {
       _loadSamples();
     });
-    
+
     // Subscribe to ping events for visual feedback
     _pingEventSubscription = _locationService.pingEventStream.listen((event) {
       if (event == 'pinging' && mounted) {
@@ -246,16 +254,18 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
     });
-    
+
     // Subscribe to distance updates (no setState — updated in _loadSamples cycle)
-    _distanceSubscription = _locationService.totalDistanceStream.listen((distance) {
+    _distanceSubscription = _locationService.totalDistanceStream.listen((
+      distance,
+    ) {
       if (mounted) {
-        _totalDistance = _distanceUnit == 'miles' 
-            ? _locationService.totalDistanceMiles 
+        _totalDistance = _distanceUnit == 'miles'
+            ? _locationService.totalDistanceMiles
             : _locationService.totalDistanceKm;
       }
     });
-    
+
     // Subscribe to speed updates (no setState — updated in _loadSamples cycle)
     _speedSubscription = _locationService.speedStream.listen((speed) {
       if (mounted) {
@@ -264,16 +274,16 @@ class _MapScreenState extends State<MapScreen> {
             : _locationService.currentSpeedKmh;
       }
     });
-    
+
     await _loadSamples();
     await _getCurrentLocation();
-    
+
     // Update periodically
     _updateTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _loadSamples();
     });
   }
-  
+
   Future<void> _loadSettings() async {
     final showSamples = await _settingsService.getShowSamples();
     final showGpsSamples = await _settingsService.getShowGpsSamples();
@@ -294,7 +304,7 @@ class _MapScreenState extends State<MapScreen> {
     final showHeatmap = await _settingsService.getShowHeatmap();
     final showPredictionRings = await _settingsService.getShowPredictionRings();
     final showDucting = await _settingsService.getShowDucting();
-    
+
     setState(() {
       _showSamples = showSamples;
       _showGpsSamples = showGpsSamples;
@@ -316,7 +326,7 @@ class _MapScreenState extends State<MapScreen> {
       _showPredictionRings = showPredictionRings;
       _showDucting = showDucting;
     });
-    
+
     // Load ping mode settings
     final pingMode = await _settingsService.getPingMode();
     final pingTimeInterval = await _settingsService.getPingTimeInterval();
@@ -326,7 +336,7 @@ class _MapScreenState extends State<MapScreen> {
     });
     _locationService.setPingMode(pingMode);
     _locationService.setPingTimeInterval(pingTimeInterval);
-    
+
     // Load sound & vibration settings
     final soundEnabled = await _settingsService.getSoundEnabled();
     final vibrationEnabled = await _settingsService.getVibrationEnabled();
@@ -336,7 +346,7 @@ class _MapScreenState extends State<MapScreen> {
     });
     SoundService().setEnabled(soundEnabled);
     SoundService().setVibrationEnabled(vibrationEnabled);
-    
+
     // Load lock rotation and successful-only filter
     final lockRotation = await _settingsService.getLockRotationNorth();
     final showSuccessfulOnly = await _settingsService.getShowSuccessfulOnly();
@@ -344,7 +354,7 @@ class _MapScreenState extends State<MapScreen> {
       _lockRotationNorth = lockRotation;
       _showSuccessfulOnly = showSuccessfulOnly;
     });
-    
+
     // Load Carpeater settings
     final carpeaterEnabled = await _settingsService.getCarpeaterEnabled();
     final carpeaterRepeaterId = await _settingsService.getCarpeaterRepeaterId();
@@ -357,7 +367,7 @@ class _MapScreenState extends State<MapScreen> {
       _carpeaterInterval = carpeaterInterval;
     });
     _locationService.setCarpeaterMode(carpeaterEnabled);
-    
+
     // Apply to services
     _locationService.setPingInterval(pingInterval);
     _locationService.loraCompanion.setIgnoredRepeaterPrefix(ignoredPrefix);
@@ -380,36 +390,44 @@ class _MapScreenState extends State<MapScreen> {
     final discoveredRepeaters = loraService.discoveredRepeaters;
     final isConnected = loraService.isDeviceConnected;
     final connType = loraService.connectionType;
-    
+
     // Skip expensive aggregation if sample count and repeater count haven't changed
-    final needsReaggregation = count != _lastAggregatedSampleCount ||
+    final needsReaggregation =
+        count != _lastAggregatedSampleCount ||
         discoveredRepeaters.length != _lastAggregatedRepeaterCount;
-    
+
     if (needsReaggregation) {
       var samples = await _locationService.getAllSamples();
-      
+
       // Apply session time filter if active
       if (_activeSessionFilter != null) {
         final start = _activeSessionFilter!.startTime;
         final end = _activeSessionFilter!.endTime ?? DateTime.now();
-        samples = samples.where((s) =>
-            s.timestamp.isAfter(start.subtract(const Duration(seconds: 1))) &&
-            s.timestamp.isBefore(end.add(const Duration(seconds: 1)))
-        ).toList();
+        samples = samples
+            .where(
+              (s) =>
+                  s.timestamp.isAfter(
+                    start.subtract(const Duration(seconds: 1)),
+                  ) &&
+                  s.timestamp.isBefore(end.add(const Duration(seconds: 1))),
+            )
+            .toList();
       }
-      
+
       // Apply source filter if active
       if (_activeSourceFilter != null) {
-        samples = samples.where((s) => s.source == _activeSourceFilter).toList();
+        samples = samples
+            .where((s) => s.source == _activeSourceFilter)
+            .toList();
       }
-      
+
       // Aggregate data with user's chosen coverage precision and repeaters
       final result = AggregationService.buildIndexes(
-        samples, 
+        samples,
         discoveredRepeaters,
         coveragePrecision: _coveragePrecision,
       );
-      
+
       // Combine repeaters from both LoRa service (live) and aggregation result (historical)
       final Map<String, Repeater> repeaterMap = {};
       for (final repeater in result.repeaters) {
@@ -418,10 +436,10 @@ class _MapScreenState extends State<MapScreen> {
       for (final repeater in discoveredRepeaters) {
         repeaterMap[repeater.id] = repeater;
       }
-      
+
       _lastAggregatedSampleCount = count;
       _lastAggregatedRepeaterCount = discoveredRepeaters.length;
-      
+
       setState(() {
         _samples = samples;
         _sampleCount = count;
@@ -434,7 +452,10 @@ class _MapScreenState extends State<MapScreen> {
     } else {
       // Just update connection status and auto-ping state if changed
       final newAutoPing = _locationService.isAutoPingEnabled;
-      if (_loraConnected != isConnected || _connectionType != connType || _autoPingEnabled != newAutoPing || _sampleCount != count) {
+      if (_loraConnected != isConnected ||
+          _connectionType != connType ||
+          _autoPingEnabled != newAutoPing ||
+          _sampleCount != count) {
         setState(() {
           _sampleCount = count;
           _loraConnected = isConnected;
@@ -443,15 +464,17 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
     }
-    
+
     // Update ducting badge if enabled
     if (_showDucting) {
       final risk = await _locationService.ductingService.getLatestRisk();
       if (mounted && risk != _currentDuctingRisk) {
-        setState(() { _currentDuctingRisk = risk; });
+        setState(() {
+          _currentDuctingRisk = risk;
+        });
       }
     }
-    
+
     // Update home screen widget
     final connLabel = isConnected
         ? (connType == ConnectionType.usb ? 'USB' : 'BT')
@@ -499,9 +522,11 @@ class _MapScreenState extends State<MapScreen> {
             _isTracking = true;
             _autoPingEnabled = false;
           });
-          _showSnackBar(carpeaterStarted
-              ? 'Carpeater mode started'
-              : 'Carpeater failed — check settings');
+          _showSnackBar(
+            carpeaterStarted
+                ? 'Carpeater mode started'
+                : 'Carpeater failed — check settings',
+          );
         } else if (_loraConnected) {
           _locationService.enableAutoPing();
           setState(() {
@@ -588,9 +613,9 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ),
     );
-    
+
     if (format == null) return;
-    
+
     // Ask save or share
     final choice = await showDialog<String>(
       context: context,
@@ -612,16 +637,16 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
     );
-    
+
     if (choice == null) return;
-    
+
     try {
       final samples = await _locationService.getAllSamples();
       final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       String content;
       String fileName;
       String extension;
-      
+
       switch (format) {
         case 'csv':
           content = _buildCsvExport(samples);
@@ -644,7 +669,7 @@ class _MapScreenState extends State<MapScreen> {
           extension = 'json';
           fileName = 'meshcore_export_$timestamp.json';
       }
-      
+
       if (choice == 'save') {
         await FilePicker.platform.saveFile(
           dialogTitle: 'Save Export',
@@ -653,12 +678,14 @@ class _MapScreenState extends State<MapScreen> {
           allowedExtensions: [extension],
           bytes: utf8.encode(content),
         );
-        _showSnackBar('Exported ${samples.length} samples as ${format.toUpperCase()}');
+        _showSnackBar(
+          'Exported ${samples.length} samples as ${format.toUpperCase()}',
+        );
       } else if (choice == 'share') {
         final directory = await getExternalStorageDirectory();
         final file = File('${directory!.path}/$fileName');
         await file.writeAsString(content);
-        
+
         await Share.shareXFiles(
           [XFile(file.path)],
           subject: 'MeshCore Wardrive Export',
@@ -670,7 +697,7 @@ class _MapScreenState extends State<MapScreen> {
       _showSnackBar('Export failed: $e');
     }
   }
-  
+
   String _buildCsvExport(List<Sample> samples) {
     final buffer = StringBuffer();
     buffer.writeln('id,lat,lon,timestamp,geohash,rssi,snr,pingSuccess,path');
@@ -679,27 +706,36 @@ class _MapScreenState extends State<MapScreen> {
         '${s.id},${s.position.latitude},${s.position.longitude},'
         '${s.timestamp.toIso8601String()},${s.geohash},'
         '${s.rssi ?? ''},${s.snr ?? ''},'
-        '${s.pingSuccess ?? ''},${s.path ?? ''}'
+        '${s.pingSuccess ?? ''},${s.path ?? ''}',
       );
     }
     return buffer.toString();
   }
-  
+
   String _buildGpxExport(List<Sample> samples) {
     final sorted = List<Sample>.from(samples)
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
+
     final buffer = StringBuffer();
     buffer.writeln('<?xml version="1.0" encoding="UTF-8"?>');
     buffer.writeln('<gpx version="1.1" creator="MeshCore Wardrive"');
     buffer.writeln('  xmlns="http://www.topografix.com/GPX/1/1">');
     buffer.writeln('  <trk>');
-    buffer.writeln('    <name>MeshCore Wardrive ${DateFormat('yyyy-MM-dd').format(DateTime.now())}</name>');
+    buffer.writeln(
+      '    <name>MeshCore Wardrive ${DateFormat('yyyy-MM-dd').format(DateTime.now())}</name>',
+    );
     buffer.writeln('    <trkseg>');
     for (final s in sorted) {
-      buffer.writeln('      <trkpt lat="${s.position.latitude}" lon="${s.position.longitude}">');
-      buffer.writeln('        <time>${s.timestamp.toUtc().toIso8601String()}</time>');
-      if (s.rssi != null) buffer.writeln('        <desc>RSSI: ${s.rssi} dBm, SNR: ${s.snr} dB</desc>');
+      buffer.writeln(
+        '      <trkpt lat="${s.position.latitude}" lon="${s.position.longitude}">',
+      );
+      buffer.writeln(
+        '        <time>${s.timestamp.toUtc().toIso8601String()}</time>',
+      );
+      if (s.rssi != null)
+        buffer.writeln(
+          '        <desc>RSSI: ${s.rssi} dBm, SNR: ${s.snr} dB</desc>',
+        );
       buffer.writeln('      </trkpt>');
     }
     buffer.writeln('    </trkseg>');
@@ -707,26 +743,30 @@ class _MapScreenState extends State<MapScreen> {
     buffer.writeln('</gpx>');
     return buffer.toString();
   }
-  
+
   String _buildKmlExport(List<Sample> samples) {
     final sorted = List<Sample>.from(samples)
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
-    final coords = sorted.map((s) => 
-      '${s.position.longitude},${s.position.latitude},0'
-    ).join('\n            ');
-    
+
+    final coords = sorted
+        .map((s) => '${s.position.longitude},${s.position.latitude},0')
+        .join('\n            ');
+
     // Build placemarks for ping results
     final placemarks = StringBuffer();
     for (final s in sorted.where((s) => s.pingSuccess != null)) {
       final icon = s.pingSuccess == true ? '#successStyle' : '#failStyle';
       placemarks.writeln('    <Placemark>');
       placemarks.writeln('      <styleUrl>$icon</styleUrl>');
-      placemarks.writeln('      <description>${s.pingSuccess == true ? 'Success' : 'Failed'}${s.rssi != null ? ' RSSI:${s.rssi}' : ''}</description>');
-      placemarks.writeln('      <Point><coordinates>${s.position.longitude},${s.position.latitude},0</coordinates></Point>');
+      placemarks.writeln(
+        '      <description>${s.pingSuccess == true ? 'Success' : 'Failed'}${s.rssi != null ? ' RSSI:${s.rssi}' : ''}</description>',
+      );
+      placemarks.writeln(
+        '      <Point><coordinates>${s.position.longitude},${s.position.latitude},0</coordinates></Point>',
+      );
       placemarks.writeln('    </Placemark>');
     }
-    
+
     return '''<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
@@ -753,26 +793,27 @@ $placemarks  </Document>
         allowedExtensions: ['json'],
         allowMultiple: true,
       );
-      
+
       if (result == null || result.files.isEmpty) return;
-      
+
       int totalSamplesImported = 0;
       int totalSessionsImported = 0;
       final Set<String> sources = {};
-      
+
       for (final pickedFile in result.files) {
         if (pickedFile.path == null) continue;
         final file = File(pickedFile.path!);
         final jsonString = await file.readAsString();
         final dynamic jsonData = jsonDecode(jsonString);
-        
+
         // Use unified import that handles both old (array) and new (object) formats
         final counts = await DatabaseService().importAllData(jsonData);
         totalSamplesImported += counts['samples'] ?? 0;
         totalSessionsImported += counts['sessions'] ?? 0;
-        
+
         // Extract sources for display
-        if (jsonData is Map<String, dynamic> && jsonData.containsKey('samples')) {
+        if (jsonData is Map<String, dynamic> &&
+            jsonData.containsKey('samples')) {
           for (final s in (jsonData['samples'] as List<dynamic>)) {
             final map = s as Map<String, dynamic>;
             if (map['source'] != null) sources.add(map['source'] as String);
@@ -784,14 +825,20 @@ $placemarks  </Document>
           }
         }
       }
-      
+
       // Reload map
       _lastAggregatedSampleCount = -1;
       await _loadSamples();
-      
-      final sourceLabel = sources.isNotEmpty ? ' from ${sources.join(', ')}' : '';
-      final sessionLabel = totalSessionsImported > 0 ? ', $totalSessionsImported sessions' : '';
-      _showSnackBar('Imported $totalSamplesImported samples$sessionLabel$sourceLabel');
+
+      final sourceLabel = sources.isNotEmpty
+          ? ' from ${sources.join(', ')}'
+          : '';
+      final sessionLabel = totalSessionsImported > 0
+          ? ', $totalSessionsImported sessions'
+          : '';
+      _showSnackBar(
+        'Imported $totalSamplesImported samples$sessionLabel$sourceLabel',
+      );
     } catch (e) {
       _showSnackBar('Import failed: $e');
     }
@@ -802,7 +849,7 @@ $placemarks  </Document>
       final jsonString = await _settingsService.exportSettingsJson();
       final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final fileName = 'meshcore_settings_$timestamp.json';
-      
+
       // Ask save or share
       final choice = await showDialog<String>(
         context: context,
@@ -824,9 +871,9 @@ $placemarks  </Document>
           ],
         ),
       );
-      
+
       if (choice == null) return;
-      
+
       if (choice == 'save') {
         await FilePicker.platform.saveFile(
           dialogTitle: 'Save Settings',
@@ -840,28 +887,27 @@ $placemarks  </Document>
         final dir = await getApplicationDocumentsDirectory();
         final file = File('${dir.path}/$fileName');
         await file.writeAsString(jsonString);
-        await Share.shareXFiles(
-          [XFile(file.path)],
-          text: 'MeshCore Wardrive Settings',
-        );
+        await Share.shareXFiles([
+          XFile(file.path),
+        ], text: 'MeshCore Wardrive Settings');
       }
     } catch (e) {
       _showSnackBar('Export failed: $e');
     }
   }
-  
+
   Future<void> _importSettings() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
-      
+
       if (result == null || result.files.single.path == null) return;
-      
+
       final file = File(result.files.single.path!);
       final jsonString = await file.readAsString();
-      
+
       // Show confirmation dialog
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
@@ -886,16 +932,16 @@ $placemarks  </Document>
           ],
         ),
       );
-      
+
       if (confirmed != true) return;
-      
+
       final applied = await _settingsService.importSettingsJson(jsonString);
-      
+
       // Reload settings to apply changes
       await _loadSettings();
       _lastAggregatedSampleCount = -1; // Force reaggregation
       await _loadSamples();
-      
+
       _showSnackBar('Imported $applied settings');
     } on FormatException catch (e) {
       _showSnackBar('Invalid settings file: ${e.message}');
@@ -907,12 +953,14 @@ $placemarks  </Document>
   // ============================================================================
   // PLANNED MARKERS
   // ============================================================================
-  
+
   Future<void> _loadMarkers() async {
     final markers = await DatabaseService().getAllMarkers();
-    setState(() { _plannedMarkers = markers; });
+    setState(() {
+      _plannedMarkers = markers;
+    });
   }
-  
+
   void _handleMapLongPress(LatLng point) async {
     final controller = TextEditingController();
     final label = await showDialog<String>(
@@ -923,8 +971,10 @@ $placemarks  </Document>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(
+              '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
@@ -936,7 +986,10 @@ $placemarks  </Document>
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
             child: const Text('Add Marker'),
@@ -944,24 +997,27 @@ $placemarks  </Document>
         ],
       ),
     );
-    
+
     if (label != null) {
       await DatabaseService().addMarker(
-        point.latitude, point.longitude,
+        point.latitude,
+        point.longitude,
         label.isEmpty ? null : label,
       );
       await _loadMarkers();
       _showSnackBar('Planned repeater marker added');
     }
   }
-  
+
   void _showMarkerInfo(Map<String, dynamic> marker) {
     final lat = marker['lat'] as double;
     final lon = marker['lon'] as double;
     final label = marker['label'] as String?;
     final id = marker['id'] as int;
-    final createdAt = DateTime.fromMillisecondsSinceEpoch(marker['created_at'] as int);
-    
+    final createdAt = DateTime.fromMillisecondsSinceEpoch(
+      marker['created_at'] as int,
+    );
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -972,8 +1028,10 @@ $placemarks  </Document>
           children: [
             Text('Lat: ${lat.toStringAsFixed(6)}'),
             Text('Lon: ${lon.toStringAsFixed(6)}'),
-            Text('Added: ${DateFormat('MMM d, yyyy').format(createdAt)}',
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            Text(
+              'Added: ${DateFormat('MMM d, yyyy').format(createdAt)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
         actions: [
@@ -986,53 +1044,59 @@ $placemarks  </Document>
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
   }
-  
+
   Widget _buildPlannedMarkersLayer() {
     if (_plannedMarkers.isEmpty) return const SizedBox.shrink();
-    
+
     final markers = _plannedMarkers.map((m) {
       final lat = m['lat'] as double;
       final lon = m['lon'] as double;
       final label = m['label'] as String?;
-      
+
       return Marker(
         point: LatLng(lat, lon),
         width: 36,
         height: 36,
         child: GestureDetector(
           onTap: () => _showMarkerInfo(m),
-          child: const Icon(
-            Icons.add_location,
-            color: Colors.amber,
-            size: 36,
-          ),
+          child: const Icon(Icons.add_location, color: Colors.amber, size: 36),
         ),
       );
     }).toList();
-    
+
     return MarkerLayer(markers: markers);
   }
-  
+
   // ============================================================================
   // DELETE MODE
   // ============================================================================
-  
+
   void _deleteSample(Sample sample) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Sample'),
         content: Text(
-          'Delete this ${sample.pingSuccess == true ? "successful" : sample.pingSuccess == false ? "failed" : "GPS-only"} '
+          'Delete this ${sample.pingSuccess == true
+              ? "successful"
+              : sample.pingSuccess == false
+              ? "failed"
+              : "GPS-only"} '
           'sample from ${DateFormat('MMM d HH:mm').format(sample.timestamp)}?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -1040,7 +1104,7 @@ $placemarks  </Document>
         ],
       ),
     );
-    
+
     if (confirmed == true) {
       await DatabaseService().deleteSample(sample.id);
       _lastAggregatedSampleCount = -1;
@@ -1048,7 +1112,7 @@ $placemarks  </Document>
       _showSnackBar('Sample deleted');
     }
   }
-  
+
   void _deleteCoverageCell(Coverage coverage) async {
     final total = (coverage.received + coverage.lost).round();
     final confirmed = await showDialog<bool>(
@@ -1061,17 +1125,25 @@ $placemarks  </Document>
           'This cannot be undone.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete All', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Delete All',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
-    
+
     if (confirmed == true) {
-      final deleted = await DatabaseService().deleteSamplesByGeohash(coverage.id);
+      final deleted = await DatabaseService().deleteSamplesByGeohash(
+        coverage.id,
+      );
       _lastAggregatedSampleCount = -1;
       await _loadSamples();
       _showSnackBar('Deleted $deleted samples from cell');
@@ -1080,22 +1152,27 @@ $placemarks  </Document>
 
   void _showSnackBar(String message, {Duration? duration}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: duration ?? const Duration(seconds: 2)),
+      SnackBar(
+        content: Text(message),
+        duration: duration ?? const Duration(seconds: 2),
+      ),
     );
   }
-  
+
   Future<void> _checkForUpdates() async {
     try {
       final response = await http.get(
-        Uri.parse('https://api.github.com/repos/mintylinux/Meshcore-Wardrive-Android/releases/latest'),
+        Uri.parse(
+          'https://api.github.com/repos/mintylinux/Meshcore-Wardrive-Android/releases/latest',
+        ),
       );
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final tagName = data['tag_name'].toString();
         // Extract version from tag like "Meshcore-Wardrive-Android-1.0.2"
         final latestVersion = tagName.split('-').last;
-        
+
         if (latestVersion != appVersion) {
           if (!mounted) return;
           showDialog(
@@ -1132,22 +1209,23 @@ $placemarks  </Document>
       _showSnackBar('Error checking for updates: $e');
     }
   }
-  
+
   Future<void> _openGitHub() async {
-    final url = Uri.parse('https://github.com/mintylinux/Meshcore-Wardrive-Android/releases');
+    final url = Uri.parse(
+      'https://github.com/mintylinux/Meshcore-Wardrive-Android/releases',
+    );
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } else {
       _showSnackBar('Could not open GitHub');
     }
   }
-  
 
   void _toggleFollowLocation() {
     setState(() {
       _followLocation = !_followLocation;
     });
-    
+
     if (_followLocation) {
       // Center on current location when enabling follow
       if (_currentPosition != null) {
@@ -1158,39 +1236,40 @@ $placemarks  </Document>
       _showSnackBar('Auto-follow disabled');
     }
   }
-  
+
   void _resetMapRotation() {
     _mapController.rotate(0); // 0 degrees = north up
     _showSnackBar('Map reset to north');
   }
-  
+
   Future<void> _captureScreenshot() async {
     try {
       // Hide UI elements
       setState(() {
         _hideUIForScreenshot = true;
       });
-      
+
       // Wait for UI to update
       await Future.delayed(const Duration(milliseconds: 300));
-      
+
       // Capture screenshot
       final Uint8List? imageBytes = await _screenshotController.capture(
         pixelRatio: 2.0, // Higher quality
       );
-      
+
       // Restore UI
       setState(() {
         _hideUIForScreenshot = false;
       });
-      
+
       if (imageBytes == null) {
         _showSnackBar('Failed to capture screenshot');
         return;
       }
-      
+
       // Save to gallery
-      final String fileName = 'meshcore_wardrive_${DateTime.now().millisecondsSinceEpoch}.png';
+      final String fileName =
+          'meshcore_wardrive_${DateTime.now().millisecondsSinceEpoch}.png';
       final result = await SaverGallery.saveImage(
         imageBytes,
         quality: 100,
@@ -1198,10 +1277,10 @@ $placemarks  </Document>
         androidRelativePath: "Pictures/MeshCore",
         skipIfExists: false,
       );
-      
+
       if (result.isSuccess) {
         _showSnackBar('Screenshot saved to gallery!');
-        
+
         // Ask if user wants to share
         if (!mounted) return;
         showDialog(
@@ -1221,10 +1300,9 @@ $placemarks  </Document>
                   final tempDir = await getTemporaryDirectory();
                   final file = File('${tempDir.path}/meshcore_screenshot.png');
                   await file.writeAsBytes(imageBytes);
-                  await Share.shareXFiles(
-                    [XFile(file.path)],
-                    text: 'MeshCore Wardrive Coverage Map',
-                  );
+                  await Share.shareXFiles([
+                    XFile(file.path),
+                  ], text: 'MeshCore Wardrive Coverage Map');
                 },
                 child: const Text('Yes'),
               ),
@@ -1256,7 +1334,6 @@ $placemarks  </Document>
     _locationService.dispose();
     super.dispose();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -1298,7 +1375,10 @@ $placemarks  </Document>
                 right: 0,
                 child: Container(
                   color: Colors.red.withValues(alpha: 0.9),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: SafeArea(
                     bottom: false,
                     child: Row(
@@ -1306,12 +1386,24 @@ $placemarks  </Document>
                         const Icon(Icons.delete, color: Colors.white, size: 18),
                         const SizedBox(width: 8),
                         const Expanded(
-                          child: Text('DELETE MODE: Tap a coverage square or sample to delete',
-                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: Text(
+                            'DELETE MODE: Tap a coverage square or sample to delete',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                         TextButton(
                           onPressed: () => setState(() => _deleteMode = false),
-                          child: const Text('EXIT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          child: const Text(
+                            'EXIT',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -1321,41 +1413,43 @@ $placemarks  </Document>
           ],
         ),
       ),
-      floatingActionButton: _hideUIForScreenshot ? null : Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'compass',
-            mini: true,
-            onPressed: _resetMapRotation,
-            child: const Icon(Icons.navigation),
-            tooltip: 'Reset to North',
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton(
-            heroTag: 'location',
-            mini: true,
-            onPressed: _toggleFollowLocation,
-            backgroundColor: _followLocation ? Colors.blue : null,
-            child: Icon(
-              _followLocation ? Icons.gps_fixed : Icons.gps_not_fixed,
+      floatingActionButton: _hideUIForScreenshot
+          ? null
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'compass',
+                  mini: true,
+                  onPressed: _resetMapRotation,
+                  child: const Icon(Icons.navigation),
+                  tooltip: 'Reset to North',
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton(
+                  heroTag: 'location',
+                  mini: true,
+                  onPressed: _toggleFollowLocation,
+                  backgroundColor: _followLocation ? Colors.blue : null,
+                  child: Icon(
+                    _followLocation ? Icons.gps_fixed : Icons.gps_not_fixed,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton(
+                  heroTag: 'tracking',
+                  onPressed: _toggleTracking,
+                  backgroundColor: _isTracking ? Colors.red : Colors.green,
+                  child: Icon(_isTracking ? Icons.stop : Icons.play_arrow),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          FloatingActionButton(
-            heroTag: 'tracking',
-            onPressed: _toggleTracking,
-            backgroundColor: _isTracking ? Colors.red : Colors.green,
-            child: Icon(_isTracking ? Icons.stop : Icons.play_arrow),
-          ),
-        ],
-      ),
     );
   }
 
   Widget _buildMap() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
@@ -1364,14 +1458,17 @@ $placemarks  </Document>
         minZoom: 3.0,
         maxZoom: 18.0,
         interactionOptions: InteractionOptions(
-          flags: _lockRotationNorth 
-              ? InteractiveFlag.all & ~InteractiveFlag.rotate  // Disable rotation
-              : InteractiveFlag.all,  // Allow all interactions
+          flags: _lockRotationNorth
+              ? InteractiveFlag.all &
+                    ~InteractiveFlag
+                        .rotate // Disable rotation
+              : InteractiveFlag.all, // Allow all interactions
         ),
         onLongPress: (tapPosition, point) => _handleMapLongPress(point),
         onMapEvent: (event) {
           // Disable follow mode if user manually pans/drags the map
-          if (event is MapEventMoveStart && event.source == MapEventSource.mapController) {
+          if (event is MapEventMoveStart &&
+              event.source == MapEventSource.mapController) {
             // Ignore programmatic moves (from auto-follow)
             return;
           }
@@ -1390,9 +1487,7 @@ $placemarks  </Document>
           subdomains: isDarkMode ? const ['a', 'b', 'c', 'd'] : const [],
           userAgentPackageName: 'com.meshcore.wardrive',
           tileProvider: _tileCacheStore != null
-              ? CachedTileProvider(
-                  store: _tileCacheStore!,
-                )
+              ? CachedTileProvider(store: _tileCacheStore!)
               : null,
         ),
         if (_showRouteTrail) _buildRouteTrailLayer(),
@@ -1403,27 +1498,28 @@ $placemarks  </Document>
         if (_showEdges) _buildEdgeLayer(),
         if (_showRepeaters) _buildRepeaterLayer(),
         _buildPlannedMarkersLayer(),
-        if (_currentPosition != null && !_hideUIForScreenshot) _buildCurrentLocationLayer(),
+        if (_currentPosition != null && !_hideUIForScreenshot)
+          _buildCurrentLocationLayer(),
       ],
     );
   }
 
   Widget _buildRouteTrailLayer() {
     if (_samples.isEmpty) return const SizedBox.shrink();
-    
+
     // Sort samples by timestamp (oldest first)
     final sorted = List<Sample>.from(_samples)
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
+
     final polylines = <Polyline>[];
     const maxGapMinutes = 5; // Break trail if gap > 5 minutes
-    
+
     var segmentPoints = <LatLng>[];
     Color segmentColor = Colors.blue;
-    
+
     for (int i = 0; i < sorted.length; i++) {
       final sample = sorted[i];
-      
+
       // Determine color for this point
       Color pointColor;
       if (sample.pingSuccess == true) {
@@ -1433,31 +1529,37 @@ $placemarks  </Document>
       } else {
         pointColor = Colors.blue;
       }
-      
+
       if (i > 0) {
-        final gap = sample.timestamp.difference(sorted[i - 1].timestamp).inMinutes;
-        
+        final gap = sample.timestamp
+            .difference(sorted[i - 1].timestamp)
+            .inMinutes;
+
         if (gap > maxGapMinutes) {
           // Save current segment and start new one
           if (segmentPoints.length >= 2) {
-            polylines.add(Polyline(
-              points: List.from(segmentPoints),
-              color: segmentColor.withValues(alpha: 0.7),
-              strokeWidth: 3.0,
-            ));
+            polylines.add(
+              Polyline(
+                points: List.from(segmentPoints),
+                color: segmentColor.withValues(alpha: 0.7),
+                strokeWidth: 3.0,
+              ),
+            );
           }
           segmentPoints = [sample.position];
           segmentColor = pointColor;
           continue;
         }
-        
+
         // If color changes, end current segment and start new one
         if (pointColor != segmentColor && segmentPoints.length >= 2) {
-          polylines.add(Polyline(
-            points: List.from(segmentPoints),
-            color: segmentColor.withValues(alpha: 0.7),
-            strokeWidth: 3.0,
-          ));
+          polylines.add(
+            Polyline(
+              points: List.from(segmentPoints),
+              color: segmentColor.withValues(alpha: 0.7),
+              strokeWidth: 3.0,
+            ),
+          );
           // Start new segment from last point of previous segment for continuity
           segmentPoints = [segmentPoints.last, sample.position];
           segmentColor = pointColor;
@@ -1466,25 +1568,27 @@ $placemarks  </Document>
       } else {
         segmentColor = pointColor;
       }
-      
+
       segmentPoints.add(sample.position);
     }
-    
+
     // Add final segment
     if (segmentPoints.length >= 2) {
-      polylines.add(Polyline(
-        points: segmentPoints,
-        color: segmentColor.withValues(alpha: 0.7),
-        strokeWidth: 3.0,
-      ));
+      polylines.add(
+        Polyline(
+          points: segmentPoints,
+          color: segmentColor.withValues(alpha: 0.7),
+          strokeWidth: 3.0,
+        ),
+      );
     }
-    
+
     return PolylineLayer(polylines: polylines);
   }
 
   Widget _buildHeatmapLayer() {
     if (_samples.isEmpty) return const SizedBox.shrink();
-    
+
     // Convert samples to weighted points
     // Higher weight = hotter on the heatmap
     final data = _samples.map((sample) {
@@ -1498,7 +1602,7 @@ $placemarks  </Document>
       }
       return WeightedLatLng(sample.position, weight);
     }).toList();
-    
+
     return HeatMapLayer(
       heatMapDataSource: InMemoryHeatMapDataSource(data: data),
       heatMapOptions: HeatMapOptions(
@@ -1516,19 +1620,25 @@ $placemarks  </Document>
 
   List<Widget> _buildCoverageLayers() {
     if (_aggregationResult == null) return [];
-    
+
     final coveragePolygons = <Polygon>[];
     final coverageMarkers = <Marker>[];
-    
+
     for (final coverage in _aggregationResult!.coverages) {
       final gh = geohash.GeoHash.decode(coverage.id);
-      final color = Color(AggregationService.getCoverageColor(coverage, _colorMode, colorBlindMode: _colorBlindMode));
+      final color = Color(
+        AggregationService.getCoverageColor(
+          coverage,
+          _colorMode,
+          colorBlindMode: _colorBlindMode,
+        ),
+      );
       final opacity = AggregationService.getCoverageOpacity(coverage);
-      
+
       // Get corners from geohash bounds
       final sw = gh.bounds.southWest;
       final ne = gh.bounds.northEast;
-      
+
       coveragePolygons.add(
         Polygon(
           points: [
@@ -1543,7 +1653,7 @@ $placemarks  </Document>
           isFilled: true,
         ),
       );
-      
+
       // Add invisible tap target at center of coverage square
       coverageMarkers.add(
         Marker(
@@ -1551,13 +1661,15 @@ $placemarks  </Document>
           width: 100,
           height: 100,
           child: GestureDetector(
-            onTap: () => _deleteMode ? _deleteCoverageCell(coverage) : _showCoverageInfo(coverage),
+            onTap: () => _deleteMode
+                ? _deleteCoverageCell(coverage)
+                : _showCoverageInfo(coverage),
             child: Container(color: Colors.transparent),
           ),
         ),
       );
     }
-    
+
     return [
       PolygonLayer(polygons: coveragePolygons),
       MarkerLayer(markers: coverageMarkers),
@@ -1566,37 +1678,42 @@ $placemarks  </Document>
 
   Widget _buildSampleLayer() {
     if (_samples.isEmpty) return const SizedBox.shrink();
-    
+
     // Filter samples based on settings
     final filteredSamples = _samples.where((sample) {
       // If showing GPS samples is disabled, hide samples with null pingSuccess
       if (!_showGpsSamples && sample.pingSuccess == null) {
         return false;
       }
-      
+
       // If showing successful only, hide failed pings and GPS-only samples
       if (_showSuccessfulOnly && sample.pingSuccess != true) {
         return false;
       }
-      
+
       // If include-only repeaters is set, only show samples from those repeaters
       if (_includeOnlyRepeaters != null && _includeOnlyRepeaters!.isNotEmpty) {
-        final allowedPrefixes = _includeOnlyRepeaters!.split(',').map((s) => s.trim().toUpperCase()).toList();
+        final allowedPrefixes = _includeOnlyRepeaters!
+            .split(',')
+            .map((s) => s.trim().toUpperCase())
+            .toList();
         final sampleNodeId = sample.path?.toUpperCase() ?? '';
-        
+
         // Check if sample's repeater matches any allowed prefix
-        final matches = allowedPrefixes.any((prefix) => sampleNodeId.startsWith(prefix));
+        final matches = allowedPrefixes.any(
+          (prefix) => sampleNodeId.startsWith(prefix),
+        );
         if (!matches) {
           return false;
         }
       }
-      
+
       return true;
     }).toList();
-    
+
     // Sort by timestamp (oldest first) so newer samples render on top
     filteredSamples.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
+
     final markers = filteredSamples.map((sample) {
       // Determine color based on ping result and color blind mode
       Color markerColor;
@@ -1607,13 +1724,14 @@ $placemarks  </Document>
       } else {
         markerColor = ColorBlindPalette.getGpsOnlyColor(_colorBlindMode);
       }
-      
+
       return Marker(
         point: sample.position,
         width: 12,
         height: 12,
         child: GestureDetector(
-          onTap: () => _deleteMode ? _deleteSample(sample) : _showSampleInfo(sample),
+          onTap: () =>
+              _deleteMode ? _deleteSample(sample) : _showSampleInfo(sample),
           child: Container(
             width: 6,
             height: 6,
@@ -1629,38 +1747,45 @@ $placemarks  </Document>
         ),
       );
     }).toList();
-    
+
     return MarkerLayer(markers: markers);
   }
 
   Widget _buildEdgeLayer() {
     if (_aggregationResult == null) return const SizedBox.shrink();
-    
+
     // Filter edges by whitelist if enabled
     var edges = _aggregationResult!.edges;
-    
-    if (_filterEdgesByWhitelist && _includeOnlyRepeaters != null && _includeOnlyRepeaters!.isNotEmpty) {
-      final allowedPrefixes = _includeOnlyRepeaters!.split(',').map((s) => s.trim().toUpperCase()).toList();
+
+    if (_filterEdgesByWhitelist &&
+        _includeOnlyRepeaters != null &&
+        _includeOnlyRepeaters!.isNotEmpty) {
+      final allowedPrefixes = _includeOnlyRepeaters!
+          .split(',')
+          .map((s) => s.trim().toUpperCase())
+          .toList();
       edges = edges.where((edge) {
         final repeaterId = edge.repeater.id.toUpperCase();
         return allowedPrefixes.any((prefix) => repeaterId.startsWith(prefix));
       }).toList();
     }
-    
+
     final polylines = edges.map((edge) {
       return Polyline(
         points: [edge.coverage.position, edge.repeater.position],
-        color: Colors.purple.withValues(alpha: 0.6),  // Increased from 0.3 to 0.6
-        strokeWidth: 2,  // Increased from 1 to 2
+        color: Colors.purple.withValues(
+          alpha: 0.6,
+        ), // Increased from 0.3 to 0.6
+        strokeWidth: 2, // Increased from 1 to 2
       );
     }).toList();
-    
+
     return PolylineLayer(polylines: polylines);
   }
 
   Widget _buildRepeaterLayer() {
     if (_repeaters.isEmpty) return const SizedBox.shrink();
-    
+
     final markers = _repeaters.map((repeater) {
       return Marker(
         point: repeater.position,
@@ -1676,12 +1801,16 @@ $placemarks  </Document>
         ),
       );
     }).toList();
-    
+
     return MarkerLayer(markers: markers);
   }
 
   /// Generate polygon points approximating a circle at a given radius
-  List<LatLng> _circlePoints(LatLng center, double radiusMeters, {int segments = 72}) {
+  List<LatLng> _circlePoints(
+    LatLng center,
+    double radiusMeters, {
+    int segments = 72,
+  }) {
     const distance = Distance();
     return List.generate(segments, (i) {
       final bearing = (360.0 / segments) * i;
@@ -1696,16 +1825,24 @@ $placemarks  </Document>
     final Map<String, List<double>> repeaterDistances = {};
     final Map<String, Repeater> repeaterById = {};
     const distance = Distance();
-    final allowedPrefixes = _includeOnlyRepeaters != null && _includeOnlyRepeaters!.isNotEmpty
-        ? _includeOnlyRepeaters!.split(',').map((s) => s.trim().toUpperCase()).toList()
+    final allowedPrefixes =
+        _includeOnlyRepeaters != null && _includeOnlyRepeaters!.isNotEmpty
+        ? _includeOnlyRepeaters!
+              .split(',')
+              .map((s) => s.trim().toUpperCase())
+              .toList()
         : null;
 
     for (final repeater in _repeaters) {
       // Skip repeaters at 0,0 (unknown position)
-      if (repeater.position.latitude == 0.0 && repeater.position.longitude == 0.0) continue;
+      if (repeater.position.latitude == 0.0 &&
+          repeater.position.longitude == 0.0)
+        continue;
       if (allowedPrefixes != null) {
         final repeaterId = repeater.id.toUpperCase();
-        final matches = allowedPrefixes.any((prefix) => repeaterId.startsWith(prefix));
+        final matches = allowedPrefixes.any(
+          (prefix) => repeaterId.startsWith(prefix),
+        );
         if (!matches) continue;
       }
       repeaterById[repeater.id] = repeater;
@@ -1713,11 +1850,18 @@ $placemarks  </Document>
 
     // Match samples to repeaters by path (nodeId)
     for (final sample in _samples) {
-      if (sample.pingSuccess != true || sample.path == null || sample.path!.isEmpty) continue;
+      if (sample.pingSuccess != true ||
+          sample.path == null ||
+          sample.path!.isEmpty)
+        continue;
       final repeater = repeaterById[sample.path!];
       if (repeater == null) continue;
 
-      final dist = distance.as(LengthUnit.Meter, sample.position, repeater.position);
+      final dist = distance.as(
+        LengthUnit.Meter,
+        sample.position,
+        repeater.position,
+      );
       // Skip impossibly large distances (GPS noise)
       if (dist > 100000) continue; // 100km sanity cap
 
@@ -1743,34 +1887,40 @@ $placemarks  </Document>
       if (maxDist < 50) continue;
 
       // Edge ring (outer, red) — max observed distance
-      polygons.add(Polygon(
-        points: _circlePoints(repeater.position, maxDist),
-        color: Colors.red.withValues(alpha: 0.05),
-        borderColor: Colors.red.withValues(alpha: 0.35),
-        borderStrokeWidth: 1.5,
-        isFilled: true,
-      ));
+      polygons.add(
+        Polygon(
+          points: _circlePoints(repeater.position, maxDist),
+          color: Colors.red.withValues(alpha: 0.05),
+          borderColor: Colors.red.withValues(alpha: 0.35),
+          borderStrokeWidth: 1.5,
+          isFilled: true,
+        ),
+      );
 
       // Moderate ring (middle, yellow)
       if (p75 > 50 && p75 < maxDist * 0.95) {
-        polygons.add(Polygon(
-          points: _circlePoints(repeater.position, p75),
-          color: Colors.yellow.withValues(alpha: 0.08),
-          borderColor: Colors.yellow.withValues(alpha: 0.5),
-          borderStrokeWidth: 1.5,
-          isFilled: true,
-        ));
+        polygons.add(
+          Polygon(
+            points: _circlePoints(repeater.position, p75),
+            color: Colors.yellow.withValues(alpha: 0.08),
+            borderColor: Colors.yellow.withValues(alpha: 0.5),
+            borderStrokeWidth: 1.5,
+            isFilled: true,
+          ),
+        );
       }
 
       // Strong ring (inner, green)
       if (p25 > 50 && p25 < p75 * 0.95) {
-        polygons.add(Polygon(
-          points: _circlePoints(repeater.position, p25),
-          color: Colors.green.withValues(alpha: 0.10),
-          borderColor: Colors.green.withValues(alpha: 0.6),
-          borderStrokeWidth: 1.5,
-          isFilled: true,
-        ));
+        polygons.add(
+          Polygon(
+            points: _circlePoints(repeater.position, p25),
+            color: Colors.green.withValues(alpha: 0.10),
+            borderColor: Colors.green.withValues(alpha: 0.6),
+            borderStrokeWidth: 1.5,
+            isFilled: true,
+          ),
+        );
       }
     }
 
@@ -1794,7 +1944,7 @@ $placemarks  </Document>
         ),
       ),
     ];
-    
+
     // Add ping pulse animation when auto-pinging
     if (_showPingPulse) {
       markers.add(
@@ -1820,7 +1970,7 @@ $placemarks  </Document>
         ),
       );
     }
-    
+
     return MarkerLayer(markers: markers);
   }
 
@@ -1836,13 +1986,15 @@ $placemarks  </Document>
             children: [
               // Connection Status Icon
               Icon(
-                _loraConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+                _loraConnected
+                    ? Icons.bluetooth_connected
+                    : Icons.bluetooth_disabled,
                 size: 16,
                 color: _loraConnected ? Colors.green : Colors.grey,
               ),
               const SizedBox(width: 4),
               Text(
-                _loraConnected 
+                _loraConnected
                     ? (_connectionType == ConnectionType.usb ? 'USB' : 'BT')
                     : 'No LoRa',
                 style: TextStyle(
@@ -1879,43 +2031,68 @@ $placemarks  </Document>
                   children: [
                     Text(
                       'Samples: $_sampleCount',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     if (_isTracking)
                       Text(
                         '${_totalDistance.toStringAsFixed(2)} ${_distanceUnit == 'miles' ? 'mi' : 'km'} • ${_currentSpeed.toStringAsFixed(1)} ${_distanceUnit == 'miles' ? 'mph' : 'km/h'}',
-                        style: const TextStyle(fontSize: 10, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                        ),
                       ),
-                    if (_carpeaterEnabled && _carpeaterState != CarpeaterState.disabled)
+                    if (_carpeaterEnabled &&
+                        _carpeaterState != CarpeaterState.disabled)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: GestureDetector(
                           onTap: _carpeaterState == CarpeaterState.error
                               ? () async {
                                   _showSnackBar('Retrying Carpeater...');
-                                  final ok = await _locationService.startCarpeater();
-                                  _showSnackBar(ok ? 'Carpeater reconnected' : 'Carpeater retry failed');
+                                  final ok = await _locationService
+                                      .startCarpeater();
+                                  _showSnackBar(
+                                    ok
+                                        ? 'Carpeater reconnected'
+                                        : 'Carpeater retry failed',
+                                  );
                                 }
                               : null,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
-                              color: (_carpeaterState == CarpeaterState.error
-                                  ? Colors.red
-                                  : _carpeaterState == CarpeaterState.loggedIn ||
-                                    _carpeaterState == CarpeaterState.discovering ||
-                                    _carpeaterState == CarpeaterState.fetchingNeighbours
-                                      ? Colors.green
-                                      : Colors.orange).withValues(alpha: 0.15),
+                              color:
+                                  (_carpeaterState == CarpeaterState.error
+                                          ? Colors.red
+                                          : _carpeaterState ==
+                                                    CarpeaterState.loggedIn ||
+                                                _carpeaterState ==
+                                                    CarpeaterState
+                                                        .discovering ||
+                                                _carpeaterState ==
+                                                    CarpeaterState
+                                                        .fetchingNeighbours
+                                          ? Colors.green
+                                          : Colors.orange)
+                                      .withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: _carpeaterState == CarpeaterState.error
                                     ? Colors.red
-                                    : _carpeaterState == CarpeaterState.loggedIn ||
-                                      _carpeaterState == CarpeaterState.discovering ||
-                                      _carpeaterState == CarpeaterState.fetchingNeighbours
-                                        ? Colors.green
-                                        : Colors.orange,
+                                    : _carpeaterState ==
+                                              CarpeaterState.loggedIn ||
+                                          _carpeaterState ==
+                                              CarpeaterState.discovering ||
+                                          _carpeaterState ==
+                                              CarpeaterState.fetchingNeighbours
+                                    ? Colors.green
+                                    : Colors.orange,
                                 width: 1,
                               ),
                             ),
@@ -1927,33 +2104,52 @@ $placemarks  </Document>
                                   style: TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
-                                    color: _carpeaterState == CarpeaterState.error
+                                    color:
+                                        _carpeaterState == CarpeaterState.error
                                         ? Colors.red
-                                        : _carpeaterState == CarpeaterState.loggedIn ||
-                                          _carpeaterState == CarpeaterState.discovering ||
-                                          _carpeaterState == CarpeaterState.fetchingNeighbours
-                                            ? Colors.green
-                                            : Colors.orange,
+                                        : _carpeaterState ==
+                                                  CarpeaterState.loggedIn ||
+                                              _carpeaterState ==
+                                                  CarpeaterState.discovering ||
+                                              _carpeaterState ==
+                                                  CarpeaterState
+                                                      .fetchingNeighbours
+                                        ? Colors.green
+                                        : Colors.orange,
                                   ),
                                 ),
-                                if (_carpeaterState == CarpeaterState.error) ...[
+                                if (_carpeaterState ==
+                                    CarpeaterState.error) ...[
                                   const SizedBox(width: 4),
-                                  Icon(Icons.refresh, size: 10, color: Colors.red),
+                                  Icon(
+                                    Icons.refresh,
+                                    size: 10,
+                                    color: Colors.red,
+                                  ),
                                 ],
                               ],
                             ),
                           ),
                         ),
                       ),
-                    if (_showDucting && _currentDuctingRisk != DuctingRisk.unknown)
+                    if (_showDucting &&
+                        _currentDuctingRisk != DuctingRisk.unknown)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
-                            color: _getDuctingColor(_currentDuctingRisk).withValues(alpha: 0.15),
+                            color: _getDuctingColor(
+                              _currentDuctingRisk,
+                            ).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: _getDuctingColor(_currentDuctingRisk), width: 1),
+                            border: Border.all(
+                              color: _getDuctingColor(_currentDuctingRisk),
+                              width: 1,
+                            ),
                           ),
                           child: Text(
                             'Ducting: ${DuctingService.riskLabel(_currentDuctingRisk)}',
@@ -1974,12 +2170,18 @@ $placemarks  </Document>
                 TextButton(
                   onPressed: _isConnecting ? null : _showConnectionDialog,
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     minimumSize: Size.zero,
                   ),
-                  child: Text(_isConnecting ? 'Connecting...' : 'Connect', style: TextStyle(fontSize: 12)),
+                  child: Text(
+                    _isConnecting ? 'Connecting...' : 'Connect',
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
-              if (_loraConnected) ...[  
+              if (_loraConnected) ...[
                 IconButton(
                   icon: const Icon(Icons.link_off, size: 16),
                   onPressed: _disconnectLoRa,
@@ -2033,7 +2235,9 @@ $placemarks  </Document>
     int responseCount = 0;
     final tag = _random.nextInt(0xFFFFFFFF);
     // Subscribe
-    final subscription = _locationService.loraCompanion.pingResults.listen((result) async {
+    final subscription = _locationService.loraCompanion.pingResults.listen((
+      result,
+    ) async {
       final pingSuccess = result.status == PingStatus.success;
       final rTag = result.tag!;
       if ((rTag == tag) && pingSuccess) {
@@ -2066,7 +2270,9 @@ $placemarks  </Document>
 
         // Reload samples to update map
         await _loadSamples();
-        _showSnackBar('✅ Ping heard by ${result.nodeId!.length > 8 ? result.nodeId!.substring(0,8) : result.nodeId}');
+        _showSnackBar(
+          '✅ Ping heard by ${result.nodeId!.length > 8 ? result.nodeId!.substring(0, 8) : result.nodeId}',
+        );
       }
     });
     try {
@@ -2099,9 +2305,7 @@ $placemarks  </Document>
       );
       await DatabaseService().insertSample(failedSample);
       _showSnackBar('❌ No response - dead zone');
-      SoundService().playForPingResult(
-        success: false,
-      );
+      SoundService().playForPingResult(success: false);
     }
   }
 
@@ -2118,8 +2322,10 @@ $placemarks  </Document>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Choose connection method:', 
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Choose connection method:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () {
@@ -2173,9 +2379,9 @@ $placemarks  </Document>
   Future<void> _connectUsb() async {
     try {
       final devices = await _locationService.loraCompanion.scanUsbDevices();
-      
+
       if (!mounted) return;
-      
+
       if (devices.isEmpty) {
         _showSnackBar('No USB devices found');
         return;
@@ -2199,7 +2405,9 @@ $placemarks  </Document>
       );
 
       if (selected != null) {
-        final connected = await _locationService.loraCompanion.connectUsb(selected);
+        final connected = await _locationService.loraCompanion.connectUsb(
+          selected,
+        );
         if (connected) {
           _showSnackBar('Connected via USB');
           await _loadSamples();
@@ -2214,11 +2422,15 @@ $placemarks  </Document>
 
   Future<void> _connectBluetooth() async {
     try {
-      _showSnackBar('Scanning for Bluetooth devices...', duration: const Duration(seconds: 3));
-      final devices = await _locationService.loraCompanion.scanBluetoothDevices();
-      
+      _showSnackBar(
+        'Scanning for Bluetooth devices...',
+        duration: const Duration(seconds: 3),
+      );
+      final devices = await _locationService.loraCompanion
+          .scanBluetoothDevices();
+
       if (!mounted) return;
-      
+
       if (devices.isEmpty) {
         _showSnackBar('No LoRa devices found via Bluetooth');
         return;
@@ -2243,8 +2455,10 @@ $placemarks  </Document>
 
       if (selected != null) {
         _showSnackBar('Connecting to ${selected.platformName}...');
-        
-        final connected = await _locationService.loraCompanion.connectBluetooth(selected);
+
+        final connected = await _locationService.loraCompanion.connectBluetooth(
+          selected,
+        );
         if (connected) {
           _showSnackBar('Connected via Bluetooth!');
           await _loadSamples();
@@ -2256,7 +2470,6 @@ $placemarks  </Document>
       _showSnackBar('Bluetooth error: $e');
     }
   }
-
 
   String _getPingIntervalDescription() {
     if (_pingIntervalMeters < 100) {
@@ -2382,12 +2595,16 @@ $placemarks  </Document>
       // Force reaggregation with new precision
       _lastAggregatedSampleCount = -1;
       await _loadSamples();
-      _showSnackBar('Coverage resolution: ${_getCoverageResolutionDescription()}');
+      _showSnackBar(
+        'Coverage resolution: ${_getCoverageResolutionDescription()}',
+      );
     }
   }
 
   Future<void> _setIgnoredRepeater() async {
-    final controller = TextEditingController(text: _ignoredRepeaterPrefix ?? '');
+    final controller = TextEditingController(
+      text: _ignoredRepeaterPrefix ?? '',
+    );
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -2431,7 +2648,9 @@ $placemarks  </Document>
       setState(() {
         _ignoredRepeaterPrefix = prefix;
       });
-      _locationService.loraCompanion.setIgnoredRepeaterPrefix(_ignoredRepeaterPrefix);
+      _locationService.loraCompanion.setIgnoredRepeaterPrefix(
+        _ignoredRepeaterPrefix,
+      );
       await _settingsService.setIgnoredRepeaterPrefix(prefix);
       _showSnackBar('Repeater prefix updated');
     }
@@ -2512,1122 +2731,1404 @@ $placemarks  </Document>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-            Row(
-              children: [
-                const Text(
-                  'Settings',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                Text(
-                  'v$appVersion',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              title: const Text('Show Coverage Boxes'),
-              value: _showCoverage,
-              onChanged: (value) async {
-                setState(() {
-                  _showCoverage = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowCoverage(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Show Samples'),
-              value: _showSamples,
-              onChanged: (value) async {
-                setState(() {
-                  _showSamples = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowSamples(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Show Edges'),
-              value: _showEdges,
-              onChanged: (value) async {
-                setState(() {
-                  _showEdges = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowEdges(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Show Repeaters'),
-              value: _showRepeaters,
-              onChanged: (value) async {
-                setState(() {
-                  _showRepeaters = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowRepeaters(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Show GPS Samples'),
-              subtitle: const Text('Show blue GPS-only markers'),
-              value: _showGpsSamples,
-              onChanged: (value) async {
-                setState(() {
-                  _showGpsSamples = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowGpsSamples(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Show Successful Pings Only'),
-              subtitle: const Text('Hide failed pings and GPS-only samples'),
-              value: _showSuccessfulOnly,
-              onChanged: (value) async {
-                setState(() {
-                  _showSuccessfulOnly = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowSuccessfulOnly(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Show Route Trail'),
-              subtitle: const Text('Draw driven path on map'),
-              value: _showRouteTrail,
-              onChanged: (value) async {
-                setState(() {
-                  _showRouteTrail = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowRouteTrail(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Show Heatmap'),
-              subtitle: const Text('Heat gradient overlay of ping activity'),
-              value: _showHeatmap,
-              onChanged: (value) async {
-                setState(() {
-                  _showHeatmap = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowHeatmap(value);
-                // Trigger heatmap rebuild
-                _heatmapRebuildStream.add(null);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Show Prediction Rings'),
-              subtitle: const Text('Estimated repeater coverage radius'),
-              value: _showPredictionRings,
-              onChanged: (value) async {
-                setState(() {
-                  _showPredictionRings = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowPredictionRings(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Atmospheric Ducting'),
-              subtitle: const Text('Monitor ducting conditions (needs internet)'),
-              value: _showDucting,
-              onChanged: (value) async {
-                setState(() {
-                  _showDucting = value;
-                });
-                setModalState(() {});
-                await _settingsService.setShowDucting(value);
-                _locationService.setDuctingEnabled(value);
-                if (value) {
-                  // Fetch immediately and update badge
-                  final risk = await _locationService.ductingService.getLatestRisk();
-                  setState(() { _currentDuctingRisk = risk; });
-                }
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Sound Feedback'),
-              subtitle: const Text('Play tones on ping results'),
-              value: _soundEnabled,
-              onChanged: (value) async {
-                setState(() { _soundEnabled = value; });
-                setModalState(() {});
-                await _settingsService.setSoundEnabled(value);
-                SoundService().setEnabled(value);
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Vibration Feedback'),
-              subtitle: const Text('Haptic feedback on ping results'),
-              value: _vibrationEnabled,
-              onChanged: (value) async {
-                setState(() { _vibrationEnabled = value; });
-                setModalState(() {});
-                await _settingsService.setVibrationEnabled(value);
-                SoundService().setVibrationEnabled(value);
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Carpeater Mode (Beta)',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-            SwitchListTile(
-              title: const Text('Enable Carpeater Mode'),
-              subtitle: Text(_carpeaterEnabled
-                  ? 'Using repeater for discovery'
-                  : 'Use a repeater to discover neighbors\nRequires v1.14+ firmware on all repeaters'),
-              value: _carpeaterEnabled,
-              onChanged: (value) async {
-                setState(() { _carpeaterEnabled = value; });
-                setModalState(() {});
-                await _settingsService.setCarpeaterEnabled(value);
-                _locationService.setCarpeaterMode(value);
-                // Sync auto-ping UI state after mode switch
-                setState(() {
-                  _autoPingEnabled = _locationService.isAutoPingEnabled;
-                });
-              },
-            ),
-            if (_carpeaterEnabled) ...[
-              ListTile(
-                title: const Text('Target Repeater'),
-                subtitle: Text(_carpeaterRepeaterId ?? 'Not set'),
-                leading: const Icon(Icons.cell_tower),
-                trailing: const Icon(Icons.edit, size: 20),
-                onTap: () async {
-                  final controller = TextEditingController(text: _carpeaterRepeaterId ?? '');
-                  final result = await showDialog<String>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Target Repeater'),
-                      content: TextField(
-                        controller: controller,
-                        decoration: const InputDecoration(
-                          labelText: 'Repeater ID Prefix',
-                          hintText: 'e.g., BAD5DC49',
+                    Row(
+                      children: [
+                        const Text(
+                          'Settings',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        textCapitalization: TextCapitalization.characters,
-                      ),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                        TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Save')),
+                        const Spacer(),
+                        Text(
+                          'v$appVersion',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
                       ],
                     ),
-                  );
-                  if (result != null) {
-                    setState(() { _carpeaterRepeaterId = result.isEmpty ? null : result; });
-                    setModalState(() {});
-                    await _settingsService.setCarpeaterRepeaterId(result.isEmpty ? null : result);
-                  }
-                },
-              ),
-              ListTile(
-                title: const Text('Admin Password'),
-                subtitle: Text(_carpeaterPassword != null ? '•' * _carpeaterPassword!.length : 'Not set'),
-                leading: const Icon(Icons.lock),
-                trailing: const Icon(Icons.edit, size: 20),
-                onTap: () async {
-                  final controller = TextEditingController(text: _carpeaterPassword ?? '');
-                  final result = await showDialog<String>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Admin Password'),
-                      content: TextField(
-                        controller: controller,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Password',
-                          hintText: 'Repeater admin password',
+                    const SizedBox(height: 16),
+                    SwitchListTile(
+                      title: const Text('Show Coverage Boxes'),
+                      value: _showCoverage,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showCoverage = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowCoverage(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show Samples'),
+                      value: _showSamples,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showSamples = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowSamples(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show Edges'),
+                      value: _showEdges,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showEdges = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowEdges(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show Repeaters'),
+                      value: _showRepeaters,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showRepeaters = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowRepeaters(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show GPS Samples'),
+                      subtitle: const Text('Show blue GPS-only markers'),
+                      value: _showGpsSamples,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showGpsSamples = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowGpsSamples(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show Successful Pings Only'),
+                      subtitle: const Text(
+                        'Hide failed pings and GPS-only samples',
+                      ),
+                      value: _showSuccessfulOnly,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showSuccessfulOnly = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowSuccessfulOnly(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show Route Trail'),
+                      subtitle: const Text('Draw driven path on map'),
+                      value: _showRouteTrail,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showRouteTrail = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowRouteTrail(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show Heatmap'),
+                      subtitle: const Text(
+                        'Heat gradient overlay of ping activity',
+                      ),
+                      value: _showHeatmap,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showHeatmap = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowHeatmap(value);
+                        // Trigger heatmap rebuild
+                        _heatmapRebuildStream.add(null);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Show Prediction Rings'),
+                      subtitle: const Text(
+                        'Estimated repeater coverage radius',
+                      ),
+                      value: _showPredictionRings,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showPredictionRings = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowPredictionRings(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Atmospheric Ducting'),
+                      subtitle: const Text(
+                        'Monitor ducting conditions (needs internet)',
+                      ),
+                      value: _showDucting,
+                      onChanged: (value) async {
+                        setState(() {
+                          _showDucting = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setShowDucting(value);
+                        _locationService.setDuctingEnabled(value);
+                        if (value) {
+                          // Fetch immediately and update badge
+                          final risk = await _locationService.ductingService
+                              .getLatestRisk();
+                          setState(() {
+                            _currentDuctingRisk = risk;
+                          });
+                        }
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Sound Feedback'),
+                      subtitle: const Text('Play tones on ping results'),
+                      value: _soundEnabled,
+                      onChanged: (value) async {
+                        setState(() {
+                          _soundEnabled = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setSoundEnabled(value);
+                        SoundService().setEnabled(value);
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Vibration Feedback'),
+                      subtitle: const Text('Haptic feedback on ping results'),
+                      value: _vibrationEnabled,
+                      onChanged: (value) async {
+                        setState(() {
+                          _vibrationEnabled = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setVibrationEnabled(value);
+                        SoundService().setVibrationEnabled(value);
+                      },
+                    ),
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Carpeater Mode (Beta)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
                         ),
                       ),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                        TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Save')),
-                      ],
                     ),
-                  );
-                  if (result != null) {
-                    setState(() { _carpeaterPassword = result.isEmpty ? null : result; });
-                    setModalState(() {});
-                    await _settingsService.setCarpeaterPassword(result.isEmpty ? null : result);
-                  }
-                },
-              ),
-              ListTile(
-                title: const Text('Cycle Interval'),
-                subtitle: const Text('Time between discovery cycles'),
-                trailing: DropdownButton<int>(
-                  value: _carpeaterInterval,
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('None')),
-                    DropdownMenuItem(value: 5, child: Text('5s')),
-                    DropdownMenuItem(value: 10, child: Text('10s')),
-                    DropdownMenuItem(value: 15, child: Text('15s')),
-                    DropdownMenuItem(value: 30, child: Text('30s')),
-                    DropdownMenuItem(value: 60, child: Text('60s')),
-                    DropdownMenuItem(value: 120, child: Text('2m')),
-                  ],
-                  onChanged: (value) async {
-                    setState(() { _carpeaterInterval = value!; });
-                    setModalState(() {});
-                    await _settingsService.setCarpeaterInterval(value!);
-                  },
-                ),
-              ),
-            ],
-            const Divider(),
-            ListTile(
-              title: const Text('Device Name'),
-              subtitle: FutureBuilder<String?>(
-                future: _settingsService.getDeviceName(),
-                builder: (context, snap) => Text(snap.data ?? 'Not set — used for multi-device wardrive'),
-              ),
-              leading: const Icon(Icons.badge),
-              trailing: const Icon(Icons.edit, size: 20),
-              onTap: () async {
-                final current = await _settingsService.getDeviceName();
-                final controller = TextEditingController(text: current ?? '');
-                final result = await showDialog<String>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Device Name'),
-                    content: TextField(
-                      controller: controller,
-                      decoration: const InputDecoration(
-                        labelText: 'Name',
-                        hintText: 'e.g., Chuck-Pixel',
+                    SwitchListTile(
+                      title: const Text('Enable Carpeater Mode'),
+                      subtitle: Text(
+                        _carpeaterEnabled
+                            ? 'Using repeater for discovery'
+                            : 'Use a repeater to discover neighbors\nRequires v1.14+ firmware on all repeaters',
                       ),
+                      value: _carpeaterEnabled,
+                      onChanged: (value) async {
+                        setState(() {
+                          _carpeaterEnabled = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setCarpeaterEnabled(value);
+                        _locationService.setCarpeaterMode(value);
+                        // Sync auto-ping UI state after mode switch
+                        setState(() {
+                          _autoPingEnabled = _locationService.isAutoPingEnabled;
+                        });
+                      },
                     ),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                      TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('Save')),
-                    ],
-                  ),
-                );
-                if (result != null) {
-                  await _settingsService.setDeviceName(result.isEmpty ? null : result);
-                  setModalState(() {});
-                }
-              },
-            ),
-            const Divider(),
-            SwitchListTile(
-              title: const Text('Lock Map Rotation'),
-              subtitle: const Text('Prevent map rotation'),
-              value: _lockRotationNorth,
-              onChanged: (value) async {
-                setState(() {
-                  _lockRotationNorth = value;
-                });
-                setModalState(() {});
-                await _settingsService.setLockRotationNorth(value);
-              },
-            ),
-            ListTile(
-              title: const Text('Theme'),
-              subtitle: Text(_getThemeModeText()),
-              trailing: const Icon(Icons.brightness_6),
-              onTap: () {
-                Navigator.pop(context);
-                _showThemeSelector();
-              },
-            ),
-            if (_loraConnected)
-              ListTile(
-                title: const Text('Scan for Repeaters'),
-                subtitle: Text(_repeaters.isEmpty 
-                    ? 'Find nearby LoRa nodes' 
-                    : '${_repeaters.length} repeater(s) found'),
-                leading: const Icon(Icons.cell_tower),
-                trailing: const Icon(Icons.search),
-                onTap: () {
-                  Navigator.pop(context);
-                  _scanForRepeaters();
-                },
-              ),
-            if (_loraConnected)
-              ListTile(
-                title: const Text('Refresh Contact List'),
-                subtitle: const Text('Update repeater names from device'),
-                leading: const Icon(Icons.refresh),
-                onTap: () {
-                  Navigator.pop(context);
-                  _refreshContacts();
-                },
-              ),
-            ListTile(
-              title: const Text('Color Mode'),
-              trailing: DropdownButton<String>(
-                value: _colorMode,
-                items: const [
-                  DropdownMenuItem(value: 'quality', child: Text('Quality')),
-                  DropdownMenuItem(value: 'age', child: Text('Age')),
-                ],
-                onChanged: (value) async {
-                  setState(() {
-                    _colorMode = value!;
-                  });
-                  await _settingsService.setColorMode(value!);
-                },
-              ),
-            ),
-            ListTile(
-              title: const Text('Distance Unit'),
-              trailing: DropdownButton<String>(
-                value: _distanceUnit,
-                items: const [
-                  DropdownMenuItem(value: 'miles', child: Text('Miles')),
-                  DropdownMenuItem(value: 'km', child: Text('Kilometers')),
-                ],
-                onChanged: (value) async {
-                  setState(() {
-                    _distanceUnit = value!;
-                    // Update displayed distance immediately
-                    _totalDistance = value == 'miles' 
-                        ? _locationService.totalDistanceMiles 
-                        : _locationService.totalDistanceKm;
-                  });
-                  setModalState(() {});
-                  await _settingsService.setDistanceUnit(value!);
-                },
-              ),
-            ),
-            ListTile(
-              title: const Text('Fuel Unit'),
-              trailing: DropdownButton<String>(
-                value: _fuelUnit,
-                items: const [
-                  DropdownMenuItem(value: 'imperial', child: Text('MPG / Gallons')),
-                  DropdownMenuItem(value: 'metric', child: Text('L/100km / Litres')),
-                ],
-                onChanged: (value) async {
-                  setState(() {
-                    _fuelUnit = value!;
-                  });
-                  setModalState(() {});
-                  await _settingsService.setFuelUnit(value!);
-                },
-              ),
-            ),
-            ListTile(
-              title: const Text('Color Blind Mode'),
-              trailing: DropdownButton<String>(
-                value: _colorBlindMode,
-                items: const [
-                  DropdownMenuItem(value: 'normal', child: Text('Normal')),
-                  DropdownMenuItem(value: 'deuteranopia', child: Text('Deuteranopia')),
-                  DropdownMenuItem(value: 'protanopia', child: Text('Protanopia')),
-                  DropdownMenuItem(value: 'tritanopia', child: Text('Tritanopia')),
-                ],
-                onChanged: (value) async {
-                  setState(() {
-                    _colorBlindMode = value!;
-                  });
-                  setModalState(() {});
-                  await _settingsService.setColorBlindMode(value!);
-                },
-              ),
-            ),
-            ListTile(
-              title: const Text('Discovery Timeout'),
-              subtitle: const Text('How long to wait for repeater responses'),
-              trailing: DropdownButton<int>(
-                value: _discoveryTimeoutSeconds,
-                items: const [
-                  DropdownMenuItem(value: 5, child: Text('5s')),
-                  DropdownMenuItem(value: 10, child: Text('10s')),
-                  DropdownMenuItem(value: 15, child: Text('15s')),
-                  DropdownMenuItem(value: 20, child: Text('20s')),
-                  DropdownMenuItem(value: 25, child: Text('25s')),
-                  DropdownMenuItem(value: 30, child: Text('30s')),
-                ],
-                onChanged: (value) async {
-                  setState(() {
-                    _discoveryTimeoutSeconds = value!;
-                  });
-                  setModalState(() {});
-                  await _settingsService.setDiscoveryTimeout(value!);
-                },
-              ),
-            ),
-            ListTile(
-              title: const Text('Ignore Mobile Repeater'),
-              subtitle: Text(_ignoredRepeaterPrefix != null 
-                  ? 'Filtering: ${_ignoredRepeaterPrefix}*' 
-                  : 'Not filtering'),
-              trailing: const Icon(Icons.edit),
-              onTap: () {
-                Navigator.pop(context);
-                _setIgnoredRepeater();
-              },
-            ),
-            ListTile(
-              title: const Text('Include Only Repeaters'),
-              subtitle: Text(_includeOnlyRepeaters != null && _includeOnlyRepeaters!.isNotEmpty
-                  ? 'Whitelist: ${_includeOnlyRepeaters}' 
-                  : 'Show all repeaters'),
-              trailing: const Icon(Icons.edit),
-              onTap: () {
-                Navigator.pop(context);
-                _setIncludeOnlyRepeaters();
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Apply Whitelist to Edges'),
-              subtitle: const Text('Only show edges for whitelisted repeaters'),
-              value: _filterEdgesByWhitelist,
-              onChanged: (value) async {
-                setState(() {
-                  _filterEdgesByWhitelist = value;
-                });
-                setModalState(() {});
-                await _settingsService.setFilterEdgesByWhitelist(value);
-              },
-            ),
-            ListTile(
-              title: const Text('Ping Mode'),
-              trailing: DropdownButton<String>(
-                value: _pingMode,
-                items: const [
-                  DropdownMenuItem(value: 'distance', child: Text('Distance')),
-                  DropdownMenuItem(value: 'time', child: Text('Time')),
-                  DropdownMenuItem(value: 'both', child: Text('Both')),
-                ],
-                onChanged: (value) async {
-                  setState(() { _pingMode = value!; });
-                  setModalState(() {});
-                  await _settingsService.setPingMode(value!);
-                  _locationService.setPingMode(value!);
-                },
-              ),
-            ),
-            if (_pingMode != 'time')
-              ListTile(
-                title: const Text('Ping Distance'),
-                subtitle: Text(_getPingIntervalDescription()),
-                trailing: const Icon(Icons.tune),
-                onTap: () {
-                  Navigator.pop(context);
-                  _setPingInterval();
-                },
-              ),
-            if (_pingMode != 'distance')
-              ListTile(
-                title: const Text('Ping Time Interval'),
-                trailing: DropdownButton<int>(
-                  value: _pingTimeInterval,
-                  items: const [
-                    DropdownMenuItem(value: 5, child: Text('5s')),
-                    DropdownMenuItem(value: 10, child: Text('10s')),
-                    DropdownMenuItem(value: 15, child: Text('15s')),
-                    DropdownMenuItem(value: 20, child: Text('20s')),
-                    DropdownMenuItem(value: 25, child: Text('25s')),
-                    DropdownMenuItem(value: 30, child: Text('30s')),
-                    DropdownMenuItem(value: 45, child: Text('45s')),
-                    DropdownMenuItem(value: 60, child: Text('60s')),
-                    DropdownMenuItem(value: 120, child: Text('2m')),
-                    DropdownMenuItem(value: 300, child: Text('5m')),
-                  ],
-                  onChanged: (value) async {
-                    setState(() { _pingTimeInterval = value!; });
-                    setModalState(() {});
-                    await _settingsService.setPingTimeInterval(value!);
-                    _locationService.setPingTimeInterval(value!);
-                  },
-                ),
-              ),
-            ListTile(
-              title: const Text('Coverage Resolution'),
-              subtitle: Text(_getCoverageResolutionDescription()),
-              trailing: const Icon(Icons.grid_on),
-              onTap: () {
-                Navigator.pop(context);
-                _setCoverageResolution();
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Statistics',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-            FutureBuilder<List<double?>>(
-              future: Future.wait([
-                _settingsService.getTotalDistanceDriven(),
-                _settingsService.getVehicleMpg(),
-                _settingsService.getGasPrice(),
-              ]),
-              builder: (context, snapshot) {
-                final totalMeters = snapshot.data?[0] ?? 0.0;
-                final vehicleMpg = snapshot.data?[1];
-                final gasPrice = snapshot.data?[2] ?? 3.50;
-                final sessionMeters = _isTracking ? _locationService.totalDistanceMeters : 0.0;
-                final grandTotalMeters = totalMeters + sessionMeters;
-                final distanceDisplay = _distanceUnit == 'miles'
-                    ? '${(grandTotalMeters / 1609.34).toStringAsFixed(2)} mi'
-                    : '${(grandTotalMeters / 1000.0).toStringAsFixed(2)} km';
-                
-                // Estimate fuel usage
-                String? fuelDisplay;
-                if (vehicleMpg != null && vehicleMpg > 0) {
-                  final totalMiles = grandTotalMeters / 1609.34;
-                  final gallonsUsed = totalMiles / vehicleMpg;
-                  if (_fuelUnit == 'metric') {
-                    final litresUsed = gallonsUsed * 3.78541;
-                    final pricePerLitre = gasPrice! / 3.78541;
-                    fuelDisplay = '${litresUsed.toStringAsFixed(2)} L (~\$${(litresUsed * pricePerLitre).toStringAsFixed(2)} @ \$${pricePerLitre.toStringAsFixed(2)}/L)';
-                  } else {
-                    fuelDisplay = '${gallonsUsed.toStringAsFixed(2)} gal (~\$${(gallonsUsed * gasPrice!).toStringAsFixed(2)} @ \$${gasPrice.toStringAsFixed(2)}/gal)';
-                  }
-                }
-                
-                return Column(
-                  children: [
-                    ListTile(
-                      title: const Text('Total Distance Driven'),
-                      subtitle: Text(distanceDisplay),
-                      leading: const Icon(Icons.straighten),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.restart_alt, size: 20),
-                        tooltip: 'Reset',
-                        onPressed: () async {
-                          final confirmed = await showDialog<bool>(
+                    if (_carpeaterEnabled) ...[
+                      ListTile(
+                        title: const Text('Target Repeater'),
+                        subtitle: Text(_carpeaterRepeaterId ?? 'Not set'),
+                        leading: const Icon(Icons.cell_tower),
+                        trailing: const Icon(Icons.edit, size: 20),
+                        onTap: () async {
+                          final controller = TextEditingController(
+                            text: _carpeaterRepeaterId ?? '',
+                          );
+                          final result = await showDialog<String>(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text('Reset Distance'),
-                              content: const Text('Reset total distance driven to zero?'),
+                              title: const Text('Target Repeater'),
+                              content: TextField(
+                                controller: controller,
+                                decoration: const InputDecoration(
+                                  labelText: 'Repeater ID Prefix',
+                                  hintText: 'e.g., BAD5DC49',
+                                ),
+                                textCapitalization:
+                                    TextCapitalization.characters,
+                              ),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
+                                  onPressed: () => Navigator.pop(ctx),
                                   child: const Text('Cancel'),
                                 ),
                                 TextButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Reset'),
+                                  onPressed: () =>
+                                      Navigator.pop(ctx, controller.text),
+                                  child: const Text('Save'),
                                 ),
                               ],
                             ),
                           );
-                          if (confirmed == true) {
-                            await _settingsService.resetTotalDistanceDriven();
+                          if (result != null) {
+                            setState(() {
+                              _carpeaterRepeaterId = result.isEmpty
+                                  ? null
+                                  : result;
+                            });
                             setModalState(() {});
+                            await _settingsService.setCarpeaterRepeaterId(
+                              result.isEmpty ? null : result,
+                            );
                           }
                         },
                       ),
-                    ),
-                    if (fuelDisplay != null)
                       ListTile(
-                        title: const Text('Estimated Fuel Used'),
-                        subtitle: Text(fuelDisplay),
-                        leading: const Icon(Icons.local_gas_station),
+                        title: const Text('Admin Password'),
+                        subtitle: Text(
+                          _carpeaterPassword != null
+                              ? '•' * _carpeaterPassword!.length
+                              : 'Not set',
+                        ),
+                        leading: const Icon(Icons.lock),
+                        trailing: const Icon(Icons.edit, size: 20),
+                        onTap: () async {
+                          final controller = TextEditingController(
+                            text: _carpeaterPassword ?? '',
+                          );
+                          final result = await showDialog<String>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Admin Password'),
+                              content: TextField(
+                                controller: controller,
+                                obscureText: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Password',
+                                  hintText: 'Repeater admin password',
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(ctx, controller.text),
+                                  child: const Text('Save'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (result != null) {
+                            setState(() {
+                              _carpeaterPassword = result.isEmpty
+                                  ? null
+                                  : result;
+                            });
+                            setModalState(() {});
+                            await _settingsService.setCarpeaterPassword(
+                              result.isEmpty ? null : result,
+                            );
+                          }
+                        },
                       ),
+                      ListTile(
+                        title: const Text('Cycle Interval'),
+                        subtitle: const Text('Time between discovery cycles'),
+                        trailing: DropdownButton<int>(
+                          value: _carpeaterInterval,
+                          items: const [
+                            DropdownMenuItem(value: 0, child: Text('None')),
+                            DropdownMenuItem(value: 5, child: Text('5s')),
+                            DropdownMenuItem(value: 10, child: Text('10s')),
+                            DropdownMenuItem(value: 15, child: Text('15s')),
+                            DropdownMenuItem(value: 30, child: Text('30s')),
+                            DropdownMenuItem(value: 60, child: Text('60s')),
+                            DropdownMenuItem(value: 120, child: Text('2m')),
+                          ],
+                          onChanged: (value) async {
+                            setState(() {
+                              _carpeaterInterval = value!;
+                            });
+                            setModalState(() {});
+                            await _settingsService.setCarpeaterInterval(value!);
+                          },
+                        ),
+                      ),
+                    ],
+                    const Divider(),
                     ListTile(
-                      title: const Text('Vehicle Fuel Economy'),
-                      subtitle: Text(vehicleMpg != null
-                          ? (_fuelUnit == 'metric'
-                              ? '${(235.215 / vehicleMpg).toStringAsFixed(1)} L/100km'
-                              : '${vehicleMpg.toStringAsFixed(1)} MPG')
-                          : 'Not set'),
-                      leading: const Icon(Icons.directions_car),
+                      title: const Text('Device Name'),
+                      subtitle: FutureBuilder<String?>(
+                        future: _settingsService.getDeviceName(),
+                        builder: (context, snap) => Text(
+                          snap.data ??
+                              'Not set — used for multi-device wardrive',
+                        ),
+                      ),
+                      leading: const Icon(Icons.badge),
                       trailing: const Icon(Icons.edit, size: 20),
                       onTap: () async {
-                        final isMetric = _fuelUnit == 'metric';
-                        final displayValue = vehicleMpg != null && isMetric
-                            ? (235.215 / vehicleMpg).toStringAsFixed(1)
-                            : vehicleMpg?.toStringAsFixed(1) ?? '';
+                        final current = await _settingsService.getDeviceName();
                         final controller = TextEditingController(
-                          text: displayValue,
+                          text: current ?? '',
                         );
-                        final confirmed = await showDialog<bool>(
+                        final result = await showDialog<String>(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: const Text('Vehicle Fuel Economy'),
+                            title: const Text('Device Name'),
                             content: TextField(
                               controller: controller,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: InputDecoration(
-                                labelText: isMetric ? 'Litres per 100km (L/100km)' : 'Miles Per Gallon (MPG)',
-                                hintText: isMetric ? 'e.g., 9.4' : 'e.g., 25.0',
+                              decoration: const InputDecoration(
+                                labelText: 'Name',
+                                hintText: 'e.g., Chuck-Pixel',
                               ),
-                              autofocus: true,
                             ),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
+                                onPressed: () => Navigator.pop(ctx),
                                 child: const Text('Cancel'),
                               ),
-                              if (vehicleMpg != null)
-                                TextButton(
-                                  onPressed: () async {
-                                    await _settingsService.setVehicleMpg(null);
-                                    Navigator.pop(ctx, true);
-                                  },
-                                  child: const Text('Clear'),
-                                ),
                               TextButton(
-                                onPressed: () => Navigator.pop(ctx, true),
+                                onPressed: () =>
+                                    Navigator.pop(ctx, controller.text),
                                 child: const Text('Save'),
                               ),
                             ],
                           ),
                         );
-                        if (confirmed == true && controller.text.isNotEmpty) {
-                          final inputValue = double.tryParse(controller.text);
-                          if (inputValue != null && inputValue > 0) {
-                            // Convert L/100km to MPG for internal storage
-                            final mpgToStore = isMetric ? 235.215 / inputValue : inputValue;
-                            await _settingsService.setVehicleMpg(mpgToStore);
-                          }
+                        if (result != null) {
+                          await _settingsService.setDeviceName(
+                            result.isEmpty ? null : result,
+                          );
+                          setModalState(() {});
                         }
+                      },
+                    ),
+                    const Divider(),
+                    SwitchListTile(
+                      title: const Text('Lock Map Rotation'),
+                      subtitle: const Text('Prevent map rotation'),
+                      value: _lockRotationNorth,
+                      onChanged: (value) async {
+                        setState(() {
+                          _lockRotationNorth = value;
+                        });
                         setModalState(() {});
+                        await _settingsService.setLockRotationNorth(value);
                       },
                     ),
                     ListTile(
-                      title: Text(_fuelUnit == 'metric' ? 'Fuel Price' : 'Gas Price'),
-                      subtitle: Text(_fuelUnit == 'metric'
-                          ? '\$${(gasPrice! / 3.78541).toStringAsFixed(2)}/L'
-                          : '\$${gasPrice!.toStringAsFixed(2)}/gal'),
-                      leading: const Icon(Icons.attach_money),
-                      trailing: const Icon(Icons.edit, size: 20),
-                      onTap: () async {
-                        final isMetric = _fuelUnit == 'metric';
-                        final displayPrice = isMetric
-                            ? (gasPrice! / 3.78541).toStringAsFixed(2)
-                            : gasPrice!.toStringAsFixed(2);
-                        final controller = TextEditingController(
-                          text: displayPrice,
-                        );
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: Text(isMetric ? 'Fuel Price' : 'Gas Price'),
-                            content: TextField(
-                              controller: controller,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: InputDecoration(
-                                labelText: isMetric ? 'Price per Litre' : 'Price per Gallon',
-                                hintText: isMetric ? 'e.g., 1.85' : 'e.g., 3.50',
-                                prefixText: '\$ ',
+                      title: const Text('Theme'),
+                      subtitle: Text(_getThemeModeText()),
+                      trailing: const Icon(Icons.brightness_6),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showThemeSelector();
+                      },
+                    ),
+                    if (_loraConnected)
+                      ListTile(
+                        title: const Text('Scan for Repeaters'),
+                        subtitle: Text(
+                          _repeaters.isEmpty
+                              ? 'Find nearby LoRa nodes'
+                              : '${_repeaters.length} repeater(s) found',
+                        ),
+                        leading: const Icon(Icons.cell_tower),
+                        trailing: const Icon(Icons.search),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _scanForRepeaters();
+                        },
+                      ),
+                    if (_loraConnected)
+                      ListTile(
+                        title: const Text('Refresh Contact List'),
+                        subtitle: const Text(
+                          'Update repeater names from device',
+                        ),
+                        leading: const Icon(Icons.refresh),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _refreshContacts();
+                        },
+                      ),
+                    ListTile(
+                      title: const Text('Color Mode'),
+                      trailing: DropdownButton<String>(
+                        value: _colorMode,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'quality',
+                            child: Text('Quality'),
+                          ),
+                          DropdownMenuItem(value: 'age', child: Text('Age')),
+                        ],
+                        onChanged: (value) async {
+                          setState(() {
+                            _colorMode = value!;
+                          });
+                          await _settingsService.setColorMode(value!);
+                        },
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Distance Unit'),
+                      trailing: DropdownButton<String>(
+                        value: _distanceUnit,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'miles',
+                            child: Text('Miles'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'km',
+                            child: Text('Kilometers'),
+                          ),
+                        ],
+                        onChanged: (value) async {
+                          setState(() {
+                            _distanceUnit = value!;
+                            // Update displayed distance immediately
+                            _totalDistance = value == 'miles'
+                                ? _locationService.totalDistanceMiles
+                                : _locationService.totalDistanceKm;
+                          });
+                          setModalState(() {});
+                          await _settingsService.setDistanceUnit(value!);
+                        },
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Fuel Unit'),
+                      trailing: DropdownButton<String>(
+                        value: _fuelUnit,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'imperial',
+                            child: Text('MPG / Gallons'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'metric',
+                            child: Text('L/100km / Litres'),
+                          ),
+                        ],
+                        onChanged: (value) async {
+                          setState(() {
+                            _fuelUnit = value!;
+                          });
+                          setModalState(() {});
+                          await _settingsService.setFuelUnit(value!);
+                        },
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Color Blind Mode'),
+                      trailing: DropdownButton<String>(
+                        value: _colorBlindMode,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'normal',
+                            child: Text('Normal'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'deuteranopia',
+                            child: Text('Deuteranopia'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'protanopia',
+                            child: Text('Protanopia'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'tritanopia',
+                            child: Text('Tritanopia'),
+                          ),
+                        ],
+                        onChanged: (value) async {
+                          setState(() {
+                            _colorBlindMode = value!;
+                          });
+                          setModalState(() {});
+                          await _settingsService.setColorBlindMode(value!);
+                        },
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Discovery Timeout'),
+                      subtitle: const Text(
+                        'How long to wait for repeater responses',
+                      ),
+                      trailing: DropdownButton<int>(
+                        value: _discoveryTimeoutSeconds,
+                        items: const [
+                          DropdownMenuItem(value: 5, child: Text('5s')),
+                          DropdownMenuItem(value: 10, child: Text('10s')),
+                          DropdownMenuItem(value: 15, child: Text('15s')),
+                          DropdownMenuItem(value: 20, child: Text('20s')),
+                          DropdownMenuItem(value: 25, child: Text('25s')),
+                          DropdownMenuItem(value: 30, child: Text('30s')),
+                        ],
+                        onChanged: (value) async {
+                          setState(() {
+                            _discoveryTimeoutSeconds = value!;
+                          });
+                          setModalState(() {});
+                          await _settingsService.setDiscoveryTimeout(value!);
+                        },
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Ignore Mobile Repeater'),
+                      subtitle: Text(
+                        _ignoredRepeaterPrefix != null
+                            ? 'Filtering: ${_ignoredRepeaterPrefix}*'
+                            : 'Not filtering',
+                      ),
+                      trailing: const Icon(Icons.edit),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _setIgnoredRepeater();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Include Only Repeaters'),
+                      subtitle: Text(
+                        _includeOnlyRepeaters != null &&
+                                _includeOnlyRepeaters!.isNotEmpty
+                            ? 'Whitelist: ${_includeOnlyRepeaters}'
+                            : 'Show all repeaters',
+                      ),
+                      trailing: const Icon(Icons.edit),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _setIncludeOnlyRepeaters();
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Apply Whitelist to Edges'),
+                      subtitle: const Text(
+                        'Only show edges for whitelisted repeaters',
+                      ),
+                      value: _filterEdgesByWhitelist,
+                      onChanged: (value) async {
+                        setState(() {
+                          _filterEdgesByWhitelist = value;
+                        });
+                        setModalState(() {});
+                        await _settingsService.setFilterEdgesByWhitelist(value);
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Ping Mode'),
+                      trailing: DropdownButton<String>(
+                        value: _pingMode,
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'distance',
+                            child: Text('Distance'),
+                          ),
+                          DropdownMenuItem(value: 'time', child: Text('Time')),
+                          DropdownMenuItem(value: 'both', child: Text('Both')),
+                        ],
+                        onChanged: (value) async {
+                          setState(() {
+                            _pingMode = value!;
+                          });
+                          setModalState(() {});
+                          await _settingsService.setPingMode(value!);
+                          _locationService.setPingMode(value!);
+                        },
+                      ),
+                    ),
+                    if (_pingMode != 'time')
+                      ListTile(
+                        title: const Text('Ping Distance'),
+                        subtitle: Text(_getPingIntervalDescription()),
+                        trailing: const Icon(Icons.tune),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _setPingInterval();
+                        },
+                      ),
+                    if (_pingMode != 'distance')
+                      ListTile(
+                        title: const Text('Ping Time Interval'),
+                        trailing: DropdownButton<int>(
+                          value: _pingTimeInterval,
+                          items: const [
+                            DropdownMenuItem(value: 5, child: Text('5s')),
+                            DropdownMenuItem(value: 10, child: Text('10s')),
+                            DropdownMenuItem(value: 15, child: Text('15s')),
+                            DropdownMenuItem(value: 20, child: Text('20s')),
+                            DropdownMenuItem(value: 25, child: Text('25s')),
+                            DropdownMenuItem(value: 30, child: Text('30s')),
+                            DropdownMenuItem(value: 45, child: Text('45s')),
+                            DropdownMenuItem(value: 60, child: Text('60s')),
+                            DropdownMenuItem(value: 120, child: Text('2m')),
+                            DropdownMenuItem(value: 300, child: Text('5m')),
+                          ],
+                          onChanged: (value) async {
+                            setState(() {
+                              _pingTimeInterval = value!;
+                            });
+                            setModalState(() {});
+                            await _settingsService.setPingTimeInterval(value!);
+                            _locationService.setPingTimeInterval(value!);
+                          },
+                        ),
+                      ),
+                    ListTile(
+                      title: const Text('Coverage Resolution'),
+                      subtitle: Text(_getCoverageResolutionDescription()),
+                      trailing: const Icon(Icons.grid_on),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _setCoverageResolution();
+                      },
+                    ),
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Statistics',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    FutureBuilder<List<double?>>(
+                      future: Future.wait([
+                        _settingsService.getTotalDistanceDriven(),
+                        _settingsService.getVehicleMpg(),
+                        _settingsService.getGasPrice(),
+                      ]),
+                      builder: (context, snapshot) {
+                        final totalMeters = snapshot.data?[0] ?? 0.0;
+                        final vehicleMpg = snapshot.data?[1];
+                        final gasPrice = snapshot.data?[2] ?? 3.50;
+                        final sessionMeters = _isTracking
+                            ? _locationService.totalDistanceMeters
+                            : 0.0;
+                        final grandTotalMeters = totalMeters + sessionMeters;
+                        final distanceDisplay = _distanceUnit == 'miles'
+                            ? '${(grandTotalMeters / 1609.34).toStringAsFixed(2)} mi'
+                            : '${(grandTotalMeters / 1000.0).toStringAsFixed(2)} km';
+
+                        // Estimate fuel usage
+                        String? fuelDisplay;
+                        if (vehicleMpg != null && vehicleMpg > 0) {
+                          final totalMiles = grandTotalMeters / 1609.34;
+                          final gallonsUsed = totalMiles / vehicleMpg;
+                          if (_fuelUnit == 'metric') {
+                            final litresUsed = gallonsUsed * 3.78541;
+                            final pricePerLitre = gasPrice! / 3.78541;
+                            fuelDisplay =
+                                '${litresUsed.toStringAsFixed(2)} L (~\$${(litresUsed * pricePerLitre).toStringAsFixed(2)} @ \$${pricePerLitre.toStringAsFixed(2)}/L)';
+                          } else {
+                            fuelDisplay =
+                                '${gallonsUsed.toStringAsFixed(2)} gal (~\$${(gallonsUsed * gasPrice!).toStringAsFixed(2)} @ \$${gasPrice.toStringAsFixed(2)}/gal)';
+                          }
+                        }
+
+                        return Column(
+                          children: [
+                            ListTile(
+                              title: const Text('Total Distance Driven'),
+                              subtitle: Text(distanceDisplay),
+                              leading: const Icon(Icons.straighten),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.restart_alt, size: 20),
+                                tooltip: 'Reset',
+                                onPressed: () async {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Reset Distance'),
+                                      content: const Text(
+                                        'Reset total distance driven to zero?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, true),
+                                          child: const Text('Reset'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed == true) {
+                                    await _settingsService
+                                        .resetTotalDistanceDriven();
+                                    setModalState(() {});
+                                  }
+                                },
                               ),
-                              autofocus: true,
                             ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Cancel'),
+                            if (fuelDisplay != null)
+                              ListTile(
+                                title: const Text('Estimated Fuel Used'),
+                                subtitle: Text(fuelDisplay),
+                                leading: const Icon(Icons.local_gas_station),
                               ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('Save'),
+                            ListTile(
+                              title: const Text('Vehicle Fuel Economy'),
+                              subtitle: Text(
+                                vehicleMpg != null
+                                    ? (_fuelUnit == 'metric'
+                                          ? '${(235.215 / vehicleMpg).toStringAsFixed(1)} L/100km'
+                                          : '${vehicleMpg.toStringAsFixed(1)} MPG')
+                                    : 'Not set',
+                              ),
+                              leading: const Icon(Icons.directions_car),
+                              trailing: const Icon(Icons.edit, size: 20),
+                              onTap: () async {
+                                final isMetric = _fuelUnit == 'metric';
+                                final displayValue =
+                                    vehicleMpg != null && isMetric
+                                    ? (235.215 / vehicleMpg).toStringAsFixed(1)
+                                    : vehicleMpg?.toStringAsFixed(1) ?? '';
+                                final controller = TextEditingController(
+                                  text: displayValue,
+                                );
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Vehicle Fuel Economy'),
+                                    content: TextField(
+                                      controller: controller,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: InputDecoration(
+                                        labelText: isMetric
+                                            ? 'Litres per 100km (L/100km)'
+                                            : 'Miles Per Gallon (MPG)',
+                                        hintText: isMetric
+                                            ? 'e.g., 9.4'
+                                            : 'e.g., 25.0',
+                                      ),
+                                      autofocus: true,
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      if (vehicleMpg != null)
+                                        TextButton(
+                                          onPressed: () async {
+                                            await _settingsService
+                                                .setVehicleMpg(null);
+                                            Navigator.pop(ctx, true);
+                                          },
+                                          child: const Text('Clear'),
+                                        ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text('Save'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true &&
+                                    controller.text.isNotEmpty) {
+                                  final inputValue = double.tryParse(
+                                    controller.text,
+                                  );
+                                  if (inputValue != null && inputValue > 0) {
+                                    // Convert L/100km to MPG for internal storage
+                                    final mpgToStore = isMetric
+                                        ? 235.215 / inputValue
+                                        : inputValue;
+                                    await _settingsService.setVehicleMpg(
+                                      mpgToStore,
+                                    );
+                                  }
+                                }
+                                setModalState(() {});
+                              },
+                            ),
+                            ListTile(
+                              title: Text(
+                                _fuelUnit == 'metric'
+                                    ? 'Fuel Price'
+                                    : 'Gas Price',
+                              ),
+                              subtitle: Text(
+                                _fuelUnit == 'metric'
+                                    ? '\$${(gasPrice! / 3.78541).toStringAsFixed(2)}/L'
+                                    : '\$${gasPrice!.toStringAsFixed(2)}/gal',
+                              ),
+                              leading: const Icon(Icons.attach_money),
+                              trailing: const Icon(Icons.edit, size: 20),
+                              onTap: () async {
+                                final isMetric = _fuelUnit == 'metric';
+                                final displayPrice = isMetric
+                                    ? (gasPrice! / 3.78541).toStringAsFixed(2)
+                                    : gasPrice!.toStringAsFixed(2);
+                                final controller = TextEditingController(
+                                  text: displayPrice,
+                                );
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: Text(
+                                      isMetric ? 'Fuel Price' : 'Gas Price',
+                                    ),
+                                    content: TextField(
+                                      controller: controller,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: InputDecoration(
+                                        labelText: isMetric
+                                            ? 'Price per Litre'
+                                            : 'Price per Gallon',
+                                        hintText: isMetric
+                                            ? 'e.g., 1.85'
+                                            : 'e.g., 3.50',
+                                        prefixText: '\$ ',
+                                      ),
+                                      autofocus: true,
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text('Save'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true &&
+                                    controller.text.isNotEmpty) {
+                                  final inputPrice = double.tryParse(
+                                    controller.text,
+                                  );
+                                  if (inputPrice != null && inputPrice > 0) {
+                                    // Convert $/L to $/gal for internal storage
+                                    final priceToStore = isMetric
+                                        ? inputPrice * 3.78541
+                                        : inputPrice;
+                                    await _settingsService.setGasPrice(
+                                      priceToStore,
+                                    );
+                                  }
+                                }
+                                setModalState(() {});
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Data Management',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Analytics'),
+                      subtitle: const Text(
+                        'Time, goals, comparison & repeater stats',
+                      ),
+                      leading: const Icon(Icons.analytics),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AnalyticsScreen(
+                              samples: _samples,
+                              coveragePrecision: _coveragePrecision,
+                              currentPosition: _currentPosition,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Session History'),
+                      subtitle: Text(
+                        _activeSessionFilter != null
+                            ? 'Filtering by session'
+                            : 'View past wardrive sessions',
+                      ),
+                      leading: const Icon(Icons.history),
+                      trailing: _activeSessionFilter != null
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.red),
+                              onPressed: () {
+                                setState(() {
+                                  _activeSessionFilter = null;
+                                });
+                                setModalState(() {});
+                                _lastAggregatedSampleCount =
+                                    -1; // Force reaggregation
+                                _loadSamples();
+                                _showSnackBar('Session filter cleared');
+                              },
+                              tooltip: 'Clear filter',
+                            )
+                          : const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _openSessionHistory();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Export Data'),
+                      subtitle: const Text('JSON, CSV, GPX, or KML'),
+                      leading: const Icon(Icons.upload),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _exportData();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Import Data'),
+                      subtitle: const Text('Load samples from file'),
+                      leading: const Icon(Icons.download),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _importData();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Share Coverage Map'),
+                      subtitle: const Text('Screenshot + share in one tap'),
+                      leading: const Icon(Icons.share),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _shareCoverageMap();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Filter by Repeater'),
+                      subtitle: Text(
+                        _includeOnlyRepeaters != null &&
+                                _includeOnlyRepeaters!.isNotEmpty
+                            ? 'Filtering: $_includeOnlyRepeaters'
+                            : 'Show coverage from a specific repeater',
+                      ),
+                      leading: const Icon(Icons.filter_alt),
+                      trailing:
+                          _includeOnlyRepeaters != null &&
+                              _includeOnlyRepeaters!.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.red),
+                              onPressed: () async {
+                                setState(() {
+                                  _includeOnlyRepeaters = null;
+                                });
+                                await _settingsService.setIncludeOnlyRepeaters(
+                                  null,
+                                );
+                                setModalState(() {});
+                                _loadSamples();
+                                _showSnackBar('Repeater filter cleared');
+                              },
+                            )
+                          : const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showRepeaterFilterPicker();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Filter by Source'),
+                      subtitle: Text(
+                        _activeSourceFilter != null
+                            ? 'Showing: $_activeSourceFilter'
+                            : 'Filter by device/operator',
+                      ),
+                      leading: const Icon(Icons.people),
+                      trailing: _activeSourceFilter != null
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, color: Colors.red),
+                              onPressed: () async {
+                                setState(() {
+                                  _activeSourceFilter = null;
+                                });
+                                setModalState(() {});
+                                _lastAggregatedSampleCount = -1;
+                                _loadSamples();
+                                _showSnackBar('Source filter cleared');
+                              },
+                            )
+                          : const Icon(Icons.arrow_forward),
+                      onTap: () async {
+                        final sources = await DatabaseService()
+                            .getDistinctSources();
+                        if (sources.isEmpty) {
+                          _showSnackBar('No source-tagged data yet');
+                          return;
+                        }
+                        if (!context.mounted) return;
+                        final picked = await showDialog<String>(
+                          context: context,
+                          builder: (context) => SimpleDialog(
+                            title: const Text('Filter by Source'),
+                            children: [
+                              SimpleDialogOption(
+                                onPressed: () => Navigator.pop(context, null),
+                                child: const Text(
+                                  'Show All',
+                                  style: TextStyle(fontStyle: FontStyle.italic),
+                                ),
+                              ),
+                              ...sources.map(
+                                (s) => SimpleDialogOption(
+                                  onPressed: () => Navigator.pop(context, s),
+                                  child: Text(s),
+                                ),
                               ),
                             ],
                           ),
                         );
-                        if (confirmed == true && controller.text.isNotEmpty) {
-                          final inputPrice = double.tryParse(controller.text);
-                          if (inputPrice != null && inputPrice > 0) {
-                            // Convert $/L to $/gal for internal storage
-                            final priceToStore = isMetric ? inputPrice * 3.78541 : inputPrice;
-                            await _settingsService.setGasPrice(priceToStore);
+                        if (picked != null || _activeSourceFilter != null) {
+                          setState(() {
+                            _activeSourceFilter = picked;
+                          });
+                          setModalState(() {});
+                          _lastAggregatedSampleCount = -1;
+                          _loadSamples();
+                          if (picked != null) {
+                            _showSnackBar('Showing data from: $picked');
+                          } else {
+                            _showSnackBar('Source filter cleared');
                           }
                         }
-                        setModalState(() {});
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Find Coverage Gaps'),
+                      subtitle: const Text('Locate areas with poor signal'),
+                      leading: const Icon(Icons.location_searching),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _findCoverageGaps();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Delete Mode'),
+                      subtitle: const Text(
+                        'Tap to delete individual samples or cells',
+                      ),
+                      leading: const Icon(
+                        Icons.delete_sweep,
+                        color: Colors.orange,
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() {
+                          _deleteMode = true;
+                        });
+                        _showSnackBar(
+                          'Delete mode ON — tap a coverage square or sample to delete',
+                        );
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Planned Repeaters'),
+                      subtitle: Text(
+                        '${_plannedMarkers.length} marker(s) — long-press map to add',
+                      ),
+                      leading: const Icon(
+                        Icons.add_location,
+                        color: Colors.amber,
+                      ),
+                      trailing: _plannedMarkers.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(
+                                Icons.clear,
+                                color: Colors.red,
+                                size: 20,
+                              ),
+                              onPressed: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Clear All Markers'),
+                                    content: const Text(
+                                      'Remove all planned repeater markers?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text(
+                                          'Clear',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true) {
+                                  for (final m in _plannedMarkers) {
+                                    await DatabaseService().deleteMarker(
+                                      m['id'] as int,
+                                    );
+                                  }
+                                  await _loadMarkers();
+                                  setModalState(() {});
+                                  _showSnackBar('All markers cleared');
+                                }
+                              },
+                            )
+                          : null,
+                    ),
+                    ListTile(
+                      title: const Text('Clear Map'),
+                      subtitle: const Text('Delete all samples and coverage'),
+                      leading: const Icon(Icons.delete, color: Colors.red),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _clearData();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Download Offline Tiles'),
+                      subtitle: const Text('Cache map tiles for current view'),
+                      leading: const Icon(Icons.download_for_offline),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showOfflineTileDownload();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Clear Tile Cache'),
+                      subtitle: const Text('Remove cached offline map tiles'),
+                      leading: const Icon(Icons.cached, color: Colors.orange),
+                      onTap: () async {
+                        if (_tileCacheStore != null) {
+                          await _tileCacheStore!.clean();
+                          _showSnackBar('Tile cache cleared');
+                        }
+                      },
+                    ),
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Settings Backup',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Export Settings'),
+                      subtitle: const Text('Save all app settings to file'),
+                      leading: const Icon(Icons.upload_file),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _exportSettings();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Import Settings'),
+                      subtitle: const Text('Load settings from file'),
+                      leading: const Icon(Icons.download),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _importSettings();
+                      },
+                    ),
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Debug',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Repeater Health'),
+                      subtitle: const Text(
+                        'Per-repeater stats, trends & alerts',
+                      ),
+                      leading: const Icon(Icons.health_and_safety),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                RepeaterHealthScreen(samples: _samples),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Signal Trends'),
+                      subtitle: const Text('RSSI, SNR & response time charts'),
+                      leading: const Icon(Icons.show_chart),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                SignalTrendScreen(samples: _samples),
+                          ),
+                        );
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Debug Diagnostics'),
+                      subtitle: const Text(
+                        'View debug logs for troubleshooting',
+                      ),
+                      leading: const Icon(Icons.bug_report),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _openDebugDiagnostics();
+                      },
+                    ),
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Online Map',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Upload Data'),
+                      subtitle: const Text('Upload samples to web map'),
+                      leading: const Icon(Icons.cloud_upload),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _uploadSamples();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('Manage Upload Sites'),
+                      subtitle: const Text('Add/edit upload endpoints'),
+                      leading: const Icon(Icons.dns),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _manageUploadSites();
+                      },
+                    ),
+                    const Divider(),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'About',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    ListTile(
+                      title: const Text('Check for Updates'),
+                      subtitle: const Text('Current version: v$appVersion'),
+                      leading: const Icon(Icons.system_update),
+                      trailing: const Icon(Icons.arrow_forward),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _checkForUpdates();
+                      },
+                    ),
+                    ListTile(
+                      title: const Text('View on GitHub'),
+                      subtitle: const Text('Source code and releases'),
+                      leading: const Icon(Icons.code),
+                      trailing: const Icon(Icons.open_in_new),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _openGitHub();
                       },
                     ),
                   ],
-                );
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Data Management',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-            ListTile(
-              title: const Text('Analytics'),
-              subtitle: const Text('Time, goals, comparison & repeater stats'),
-              leading: const Icon(Icons.analytics),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AnalyticsScreen(
-                      samples: _samples,
-                      coveragePrecision: _coveragePrecision,
-                      currentPosition: _currentPosition,
-                    ),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              title: const Text('Session History'),
-              subtitle: Text(_activeSessionFilter != null 
-                  ? 'Filtering by session' 
-                  : 'View past wardrive sessions'),
-              leading: const Icon(Icons.history),
-              trailing: _activeSessionFilter != null
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.red),
-                      onPressed: () {
-                        setState(() {
-                          _activeSessionFilter = null;
-                        });
-                        setModalState(() {});
-                        _lastAggregatedSampleCount = -1; // Force reaggregation
-                        _loadSamples();
-                        _showSnackBar('Session filter cleared');
-                      },
-                      tooltip: 'Clear filter',
-                    )
-                  : const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                _openSessionHistory();
-              },
-            ),
-            ListTile(
-              title: const Text('Export Data'),
-              subtitle: const Text('JSON, CSV, GPX, or KML'),
-              leading: const Icon(Icons.upload),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                _exportData();
-              },
-            ),
-            ListTile(
-              title: const Text('Import Data'),
-              subtitle: const Text('Load samples from file'),
-              leading: const Icon(Icons.download),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                _importData();
-              },
-            ),
-            ListTile(
-              title: const Text('Share Coverage Map'),
-              subtitle: const Text('Screenshot + share in one tap'),
-              leading: const Icon(Icons.share),
-              onTap: () {
-                Navigator.pop(context);
-                _shareCoverageMap();
-              },
-            ),
-            ListTile(
-              title: const Text('Filter by Repeater'),
-              subtitle: Text(_includeOnlyRepeaters != null && _includeOnlyRepeaters!.isNotEmpty
-                  ? 'Filtering: $_includeOnlyRepeaters'
-                  : 'Show coverage from a specific repeater'),
-              leading: const Icon(Icons.filter_alt),
-              trailing: _includeOnlyRepeaters != null && _includeOnlyRepeaters!.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.red),
-                      onPressed: () async {
-                        setState(() { _includeOnlyRepeaters = null; });
-                        await _settingsService.setIncludeOnlyRepeaters(null);
-                        setModalState(() {});
-                        _loadSamples();
-                        _showSnackBar('Repeater filter cleared');
-                      },
-                    )
-                  : const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                _showRepeaterFilterPicker();
-              },
-            ),
-            ListTile(
-              title: const Text('Filter by Source'),
-              subtitle: Text(_activeSourceFilter != null
-                  ? 'Showing: $_activeSourceFilter'
-                  : 'Filter by device/operator'),
-              leading: const Icon(Icons.people),
-              trailing: _activeSourceFilter != null
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.red),
-                      onPressed: () async {
-                        setState(() { _activeSourceFilter = null; });
-                        setModalState(() {});
-                        _lastAggregatedSampleCount = -1;
-                        _loadSamples();
-                        _showSnackBar('Source filter cleared');
-                      },
-                    )
-                  : const Icon(Icons.arrow_forward),
-              onTap: () async {
-                final sources = await DatabaseService().getDistinctSources();
-                if (sources.isEmpty) {
-                  _showSnackBar('No source-tagged data yet');
-                  return;
-                }
-                if (!context.mounted) return;
-                final picked = await showDialog<String>(
-                  context: context,
-                  builder: (context) => SimpleDialog(
-                    title: const Text('Filter by Source'),
-                    children: [
-                      SimpleDialogOption(
-                        onPressed: () => Navigator.pop(context, null),
-                        child: const Text('Show All', style: TextStyle(fontStyle: FontStyle.italic)),
-                      ),
-                      ...sources.map((s) => SimpleDialogOption(
-                        onPressed: () => Navigator.pop(context, s),
-                        child: Text(s),
-                      )),
-                    ],
-                  ),
-                );
-                if (picked != null || _activeSourceFilter != null) {
-                  setState(() { _activeSourceFilter = picked; });
-                  setModalState(() {});
-                  _lastAggregatedSampleCount = -1;
-                  _loadSamples();
-                  if (picked != null) {
-                    _showSnackBar('Showing data from: $picked');
-                  } else {
-                    _showSnackBar('Source filter cleared');
-                  }
-                }
-              },
-            ),
-            ListTile(
-              title: const Text('Find Coverage Gaps'),
-              subtitle: const Text('Locate areas with poor signal'),
-              leading: const Icon(Icons.location_searching),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                _findCoverageGaps();
-              },
-            ),
-            ListTile(
-              title: const Text('Delete Mode'),
-              subtitle: const Text('Tap to delete individual samples or cells'),
-              leading: const Icon(Icons.delete_sweep, color: Colors.orange),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() { _deleteMode = true; });
-                _showSnackBar('Delete mode ON — tap a coverage square or sample to delete');
-              },
-            ),
-            ListTile(
-              title: const Text('Planned Repeaters'),
-              subtitle: Text('${_plannedMarkers.length} marker(s) — long-press map to add'),
-              leading: const Icon(Icons.add_location, color: Colors.amber),
-              trailing: _plannedMarkers.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.red, size: 20),
-                      onPressed: () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('Clear All Markers'),
-                            content: const Text('Remove all planned repeater markers?'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear', style: TextStyle(color: Colors.red))),
-                            ],
-                          ),
-                        );
-                        if (confirmed == true) {
-                          for (final m in _plannedMarkers) {
-                            await DatabaseService().deleteMarker(m['id'] as int);
-                          }
-                          await _loadMarkers();
-                          setModalState(() {});
-                          _showSnackBar('All markers cleared');
-                        }
-                      },
-                    )
-                  : null,
-            ),
-            ListTile(
-              title: const Text('Clear Map'),
-              subtitle: const Text('Delete all samples and coverage'),
-              leading: const Icon(Icons.delete, color: Colors.red),
-              onTap: () {
-                Navigator.pop(context);
-                _clearData();
-              },
-            ),
-            ListTile(
-              title: const Text('Download Offline Tiles'),
-              subtitle: const Text('Cache map tiles for current view'),
-              leading: const Icon(Icons.download_for_offline),
-              onTap: () {
-                Navigator.pop(context);
-                _showOfflineTileDownload();
-              },
-            ),
-            ListTile(
-              title: const Text('Clear Tile Cache'),
-              subtitle: const Text('Remove cached offline map tiles'),
-              leading: const Icon(Icons.cached, color: Colors.orange),
-              onTap: () async {
-                if (_tileCacheStore != null) {
-                  await _tileCacheStore!.clean();
-                  _showSnackBar('Tile cache cleared');
-                }
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Settings Backup',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-            ListTile(
-              title: const Text('Export Settings'),
-              subtitle: const Text('Save all app settings to file'),
-              leading: const Icon(Icons.upload_file),
-              onTap: () {
-                Navigator.pop(context);
-                _exportSettings();
-              },
-            ),
-            ListTile(
-              title: const Text('Import Settings'),
-              subtitle: const Text('Load settings from file'),
-              leading: const Icon(Icons.download),
-              onTap: () {
-                Navigator.pop(context);
-                _importSettings();
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Debug',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-            ListTile(
-              title: const Text('Repeater Health'),
-              subtitle: const Text('Per-repeater stats, trends & alerts'),
-              leading: const Icon(Icons.health_and_safety),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => RepeaterHealthScreen(samples: _samples),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              title: const Text('Signal Trends'),
-              subtitle: const Text('RSSI, SNR & response time charts'),
-              leading: const Icon(Icons.show_chart),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SignalTrendScreen(samples: _samples),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              title: const Text('Debug Diagnostics'),
-              subtitle: const Text('View debug logs for troubleshooting'),
-              leading: const Icon(Icons.bug_report),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                _openDebugDiagnostics();
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Online Map',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-            ListTile(
-              title: const Text('Upload Data'),
-              subtitle: const Text('Upload samples to web map'),
-              leading: const Icon(Icons.cloud_upload),
-              onTap: () {
-                Navigator.pop(context);
-                _uploadSamples();
-              },
-            ),
-            ListTile(
-              title: const Text('Manage Upload Sites'),
-              subtitle: const Text('Add/edit upload endpoints'),
-              leading: const Icon(Icons.dns),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                _manageUploadSites();
-              },
-            ),
-            const Divider(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'About',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-            ),
-            ListTile(
-              title: const Text('Check for Updates'),
-              subtitle: const Text('Current version: v$appVersion'),
-              leading: const Icon(Icons.system_update),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () {
-                Navigator.pop(context);
-                _checkForUpdates();
-              },
-            ),
-            ListTile(
-              title: const Text('View on GitHub'),
-              subtitle: const Text('Source code and releases'),
-              leading: const Icon(Icons.code),
-              trailing: const Icon(Icons.open_in_new),
-              onTap: () {
-                Navigator.pop(context);
-                _openGitHub();
-              },
-            ),
-                ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
-  
-  
+
   Future<void> _disconnectLoRa() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -3646,7 +4147,7 @@ $placemarks  </Document>
         ],
       ),
     );
-    
+
     if (confirmed == true) {
       // Disable auto-ping and carpeater
       _locationService.disableAutoPing();
@@ -3655,14 +4156,13 @@ $placemarks  </Document>
         _autoPingEnabled = false;
         _carpeaterState = CarpeaterState.disabled;
       });
-      
+
       await _locationService.loraCompanion.disconnectDevice();
       await _loadSamples();
       _showSnackBar('LoRa device disconnected');
     }
   }
-  
-  
+
   IconData _getBatteryIcon(int percent) {
     if (percent > 90) return Icons.battery_full;
     if (percent > 70) return Icons.battery_5_bar;
@@ -3671,25 +4171,32 @@ $placemarks  </Document>
     if (percent > 15) return Icons.battery_2_bar;
     return Icons.battery_1_bar;
   }
-  
+
   Color _getBatteryColor(int percent) {
     if (percent > 30) return Colors.green;
     if (percent > 15) return Colors.orange;
     return Colors.red;
   }
-  
+
   String _carpeaterStateLabel() {
     switch (_carpeaterState) {
-      case CarpeaterState.disabled: return 'Off';
-      case CarpeaterState.connecting: return 'Connecting';
-      case CarpeaterState.loggingIn: return 'Login...';
-      case CarpeaterState.loggedIn: return 'Ready';
-      case CarpeaterState.discovering: return 'Scanning';
-      case CarpeaterState.fetchingNeighbours: return 'Fetching';
-      case CarpeaterState.error: return 'Error';
+      case CarpeaterState.disabled:
+        return 'Off';
+      case CarpeaterState.connecting:
+        return 'Connecting';
+      case CarpeaterState.loggingIn:
+        return 'Login...';
+      case CarpeaterState.loggedIn:
+        return 'Ready';
+      case CarpeaterState.discovering:
+        return 'Scanning';
+      case CarpeaterState.fetchingNeighbours:
+        return 'Fetching';
+      case CarpeaterState.error:
+        return 'Error';
     }
   }
-  
+
   Color _getDuctingColor(String risk) {
     switch (risk) {
       case 'none':
@@ -3702,38 +4209,38 @@ $placemarks  </Document>
         return Colors.grey;
     }
   }
-  
+
   Future<void> _refreshContacts() async {
     if (!_loraConnected) {
       _showSnackBar('Connect LoRa device first');
       return;
     }
-    
+
     _showSnackBar('Refreshing contact list...');
-    
+
     // Request full contact list from device
     await _locationService.loraCompanion.refreshContactList();
-    
+
     // Give it a moment to process
     await Future.delayed(const Duration(seconds: 2));
-    
+
     _showSnackBar('Contact list updated');
   }
-  
+
   Future<void> _scanForRepeaters() async {
     if (!_loraConnected) {
       _showSnackBar('Connect LoRa device first');
       return;
     }
-    
+
     _showSnackBar('Scanning for repeaters...');
-    
+
     final repeaters = await _locationService.loraCompanion.scanForRepeaters();
-    
+
     setState(() {
       _repeaters = repeaters;
     });
-    
+
     if (repeaters.isEmpty) {
       _showSnackBar('No repeaters found');
     } else {
@@ -3741,7 +4248,7 @@ $placemarks  </Document>
       _showRepeatersDialog();
     }
   }
-  
+
   void _openSessionHistory() {
     Navigator.push(
       context,
@@ -3753,28 +4260,29 @@ $placemarks  </Document>
             });
             _lastAggregatedSampleCount = -1; // Force reaggregation with filter
             _loadSamples();
-            _showSnackBar('Showing session from ${DateFormat('MMM d, h:mm a').format(session.startTime)}');
+            _showSnackBar(
+              'Showing session from ${DateFormat('MMM d, h:mm a').format(session.startTime)}',
+            );
           },
         ),
       ),
     );
   }
-  
+
   void _openDebugDiagnostics() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => DebugDiagnosticsScreen(
-          locationService: _locationService,
-        ),
+        builder: (context) =>
+            DebugDiagnosticsScreen(locationService: _locationService),
       ),
     );
   }
-  
+
   String _getThemeModeText() {
     final appState = MyApp.of(context);
     if (appState == null) return 'System Default';
-    
+
     switch (appState.themeMode) {
       case ThemeMode.light:
         return 'Light';
@@ -3784,11 +4292,11 @@ $placemarks  </Document>
         return 'System Default';
     }
   }
-  
+
   Future<void> _showThemeSelector() async {
     final appState = MyApp.of(context);
     if (appState == null) return;
-    
+
     final selected = await showDialog<ThemeMode>(
       context: context,
       builder: (context) => AlertDialog(
@@ -3815,16 +4323,16 @@ $placemarks  </Document>
         ),
       ),
     );
-    
+
     if (selected != null) {
       await appState.setThemeMode(selected);
       setState(() {}); // Refresh to update map tiles
     }
   }
-  
+
   String? _getRepeaterName(String? repeaterId) {
     if (repeaterId == null) return null;
-    
+
     // If it's a 2-char prefix, try to expand it first
     String? fullId = repeaterId;
     if (repeaterId.length == 2) {
@@ -3834,35 +4342,47 @@ $placemarks  </Document>
         return repeaterId;
       }
     }
-    
+
     // First check discovered repeaters list
     final repeater = _repeaters.firstWhere(
       (r) => r.id == fullId,
-      orElse: () => Repeater(id: fullId!, position: const LatLng(0, 0), timestamp: DateTime.now()),
+      orElse: () => Repeater(
+        id: fullId!,
+        position: const LatLng(0, 0),
+        timestamp: DateTime.now(),
+      ),
     );
     if (repeater.name != null) return repeater.name;
-    
+
     // Fall back to checking LoRa service's contact cache
-    final loraRepeater = _locationService.loraCompanion.getRepeaterLocation(fullId!);
+    final loraRepeater = _locationService.loraCompanion.getRepeaterLocation(
+      fullId!,
+    );
     return loraRepeater?.name ?? null; // Return full ID if no name
   }
-  
+
   void _showSampleInfo(Sample sample) {
-    final timestamp = DateFormat('MMM d, yyyy HH:mm:ss').format(sample.timestamp);
+    final timestamp = DateFormat(
+      'MMM d, yyyy HH:mm:ss',
+    ).format(sample.timestamp);
     final hasSignalData = sample.rssi != null || sample.snr != null;
-    final pingStatus = sample.pingSuccess == true 
-        ? '✅ Success' 
-        : sample.pingSuccess == false 
-            ? '❌ Failed' 
-            : '📍 GPS Only';
-    
+    final pingStatus = sample.pingSuccess == true
+        ? '✅ Success'
+        : sample.pingSuccess == false
+        ? '❌ Failed'
+        : '📍 GPS Only';
+
     // Get repeater name if available (sample.path holds repeater/node ID)
-    final repeaterName = sample.path != null ? _getRepeaterName(sample.path) : null;
+    final repeaterName = sample.path != null
+        ? _getRepeaterName(sample.path)
+        : null;
     final idOrName = repeaterName ?? sample.path ?? 'Unknown';
     final repeaterDisplay = (repeaterName != null)
         ? repeaterName
-        : (idOrName.length > 8 ? idOrName.substring(0, 8).toUpperCase() : idOrName.toUpperCase());
-    
+        : (idOrName.length > 8
+              ? idOrName.substring(0, 8).toUpperCase()
+              : idOrName.toUpperCase());
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -3873,7 +4393,10 @@ $placemarks  </Document>
           children: [
             Row(
               children: [
-                const Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Status: ',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 Text(pingStatus),
               ],
             ),
@@ -3887,26 +4410,38 @@ $placemarks  </Document>
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Text('Repeater: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Expanded(child: Text(repeaterDisplay, style: const TextStyle(fontFamily: 'monospace'))),
+                  const Text(
+                    'Repeater: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Expanded(
+                    child: Text(
+                      repeaterDisplay,
+                      style: const TextStyle(fontFamily: 'monospace'),
+                    ),
+                  ),
                 ],
               ),
             ],
-            if (hasSignalData)
-              const Divider(height: 16),
-            if (hasSignalData)
-              const SizedBox(height: 8),
+            if (hasSignalData) const Divider(height: 16),
+            if (hasSignalData) const SizedBox(height: 8),
             if (sample.rssi != null)
               Row(
                 children: [
-                  const Text('RSSI: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'RSSI: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Text('${sample.rssi} dBm'),
                 ],
               ),
             if (sample.snr != null)
               Row(
                 children: [
-                  const Text('SNR: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'SNR: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Text('${sample.snr} dB'),
                 ],
               ),
@@ -3914,7 +4449,10 @@ $placemarks  </Document>
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const Text('Response: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Response: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Text('${sample.responseTimeMs} ms'),
                 ],
               ),
@@ -3923,11 +4461,19 @@ $placemarks  </Document>
               const Divider(height: 16),
               Row(
                 children: [
-                  const Text('Ducting: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Ducting: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: _getDuctingColor(sample.ductingRisk!).withValues(alpha: 0.15),
+                      color: _getDuctingColor(
+                        sample.ductingRisk!,
+                      ).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -3953,36 +4499,43 @@ $placemarks  </Document>
       ),
     );
   }
-  
+
   void _showRepeaterInfo(Repeater repeater) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(repeater.name ?? 'Repeater ${(repeater.id.length > 8 ? repeater.id.substring(0,8) : repeater.id).toUpperCase()}'),
+        title: Text(
+          repeater.name ??
+              'Repeater ${(repeater.id.length > 8 ? repeater.id.substring(0, 8) : repeater.id).toUpperCase()}',
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ID: ${(repeater.id.length > 8 ? repeater.id.substring(0,8) : repeater.id).toUpperCase()}', style: const TextStyle(fontFamily: 'monospace')),
+            Text(
+              'ID: ${(repeater.id.length > 8 ? repeater.id.substring(0, 8) : repeater.id).toUpperCase()}',
+              style: const TextStyle(fontFamily: 'monospace'),
+            ),
             const SizedBox(height: 8),
             Text('Lat: ${repeater.position.latitude.toStringAsFixed(6)}'),
             Text('Lon: ${repeater.position.longitude.toStringAsFixed(6)}'),
-            if (repeater.rssi != null)
-              const SizedBox(height: 8),
-            if (repeater.rssi != null)
-              Text('RSSI: ${repeater.rssi} dBm'),
-            if (repeater.snr != null)
-              Text('SNR: ${repeater.snr} dB'),
+            if (repeater.rssi != null) const SizedBox(height: 8),
+            if (repeater.rssi != null) Text('RSSI: ${repeater.rssi} dBm'),
+            if (repeater.snr != null) Text('SNR: ${repeater.snr} dB'),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              setState(() { _includeOnlyRepeaters = repeater.id; });
+              setState(() {
+                _includeOnlyRepeaters = repeater.id;
+              });
               await _settingsService.setIncludeOnlyRepeaters(repeater.id);
               _loadSamples();
-              _showSnackBar('Filtering by ${(repeater.id.length > 8 ? repeater.id.substring(0,8) : repeater.id).toUpperCase()}');
+              _showSnackBar(
+                'Filtering by ${(repeater.id.length > 8 ? repeater.id.substring(0, 8) : repeater.id).toUpperCase()}',
+              );
             },
             child: const Text('Filter by This'),
           ),
@@ -4001,22 +4554,31 @@ $placemarks  </Document>
       ),
     );
   }
-  
+
   void _showCoverageInfo(Coverage coverage) {
     // Calculate total samples and success rate
     final total = coverage.received + coverage.lost;
-    final successRate = total > 0 ? ((coverage.received / total) * 100).toStringAsFixed(0) : 'N/A';
+    final successRate = total > 0
+        ? ((coverage.received / total) * 100).toStringAsFixed(0)
+        : 'N/A';
     final reliabilityText = total > 0 ? '$successRate%' : 'No ping data';
-    
+
     // Round weighted values to 1 decimal place for display
     final receivedDisplay = coverage.received.toStringAsFixed(1);
     final lostDisplay = coverage.lost.toStringAsFixed(1);
     final totalDisplay = total.toStringAsFixed(1);
-    
+
     // Get unique repeater prefixes (first 4 chars)
-    final uniquePrefixes = coverage.repeaters.map((id) => id.substring(0, id.length >= 4 ? 4 : id.length)).toSet().toList()..sort();
-    final repeaterText = uniquePrefixes.isNotEmpty ? uniquePrefixes.join(', ') : 'None';
-    
+    final uniquePrefixes =
+        coverage.repeaters
+            .map((id) => id.substring(0, id.length >= 4 ? 4 : id.length))
+            .toSet()
+            .toList()
+          ..sort();
+    final repeaterText = uniquePrefixes.isNotEmpty
+        ? uniquePrefixes.join(', ')
+        : 'None';
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -4027,51 +4589,76 @@ $placemarks  </Document>
           children: [
             Row(
               children: [
-                const Text('Samples: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Samples: ',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 Text(totalDisplay),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                const Text('Success Rate: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Success Rate: ',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 Text(reliabilityText),
               ],
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                const Text('Received: ', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Received: ',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 Flexible(child: Text(receivedDisplay)),
               ],
             ),
             const SizedBox(height: 4),
             Row(
               children: [
-                const Text('Lost: ', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Lost: ',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 Flexible(child: Text(lostDisplay)),
               ],
             ),
-            if (coverage.received > 0)
-              const SizedBox(height: 8),
+            if (coverage.received > 0) const SizedBox(height: 8),
             if (coverage.received > 0)
               Row(
                 children: [
-                  const Text('Repeaters Heard: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Repeaters Heard: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Text('${uniquePrefixes.length}'),
                 ],
               ),
-            if (coverage.received > 0)
-              const SizedBox(height: 4),
+            if (coverage.received > 0) const SizedBox(height: 4),
             if (coverage.received > 0)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Repeater IDs: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Repeater IDs: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Expanded(
                     child: Text(
                       repeaterText,
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -4138,12 +4725,12 @@ $placemarks  </Document>
     // Check if multiple sites are selected
     final selectedSites = await _uploadService.getSelectedEndpoints();
     final endpoints = await _uploadService.getUploadEndpoints();
-    
+
     // Track progress state
     int currentBatch = 0;
     int totalBatches = 0;
     String currentSite = '';
-    
+
     // Show loading dialog with progress
     showDialog(
       context: context,
@@ -4177,14 +4764,14 @@ $placemarks  </Document>
     try {
       // Build repeater names map from discovered repeaters and LoRa service
       final repeaterNames = <String, String>{};
-      
+
       // Add names from discovered repeaters
       for (final repeater in _repeaters) {
         if (repeater.name != null) {
           repeaterNames[repeater.id] = repeater.name!;
         }
       }
-      
+
       // Add names from LoRa service contact cache
       final loraService = _locationService.loraCompanion;
       for (final contact in loraService.discoveredRepeaters) {
@@ -4192,9 +4779,9 @@ $placemarks  </Document>
           repeaterNames[contact.id] = contact.name!;
         }
       }
-      
+
       Map<String, UploadResult> results;
-      
+
       // Always use multi-site upload path if any endpoints are configured
       // This ensures custom endpoints work correctly
       if (selectedSites.isNotEmpty && endpoints.isNotEmpty) {
@@ -4221,14 +4808,14 @@ $placemarks  </Document>
         );
         results = {'Upload': result};
       }
-      
+
       if (mounted) {
         Navigator.pop(context); // Close loading dialog
-        
+
         // Show results
         final allSuccess = results.values.every((r) => r.success);
         final successCount = results.values.where((r) => r.success).length;
-        
+
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -4246,8 +4833,12 @@ $placemarks  </Document>
                     child: Row(
                       children: [
                         Icon(
-                          entry.value.success ? Icons.check_circle : Icons.error,
-                          color: entry.value.success ? Colors.green : Colors.red,
+                          entry.value.success
+                              ? Icons.check_circle
+                              : Icons.error,
+                          color: entry.value.success
+                              ? Colors.green
+                              : Colors.red,
                           size: 20,
                         ),
                         const SizedBox(width: 8),
@@ -4257,12 +4848,17 @@ $placemarks  </Document>
                             children: [
                               Text(
                                 entry.key,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               if (!entry.value.success)
                                 Text(
                                   entry.value.message,
-                                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                             ],
                           ),
@@ -4293,7 +4889,7 @@ $placemarks  </Document>
   Future<void> _manageUploadSites() async {
     final endpoints = await _uploadService.getUploadEndpoints();
     final selectedNames = await _uploadService.getSelectedEndpoints();
-    
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -4318,7 +4914,10 @@ $placemarks  </Document>
                     children: const [
                       Text(
                         'Manage Upload Sites',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -4359,9 +4958,15 @@ $placemarks  </Document>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit, size: 20, color: Colors.blue),
+                              icon: const Icon(
+                                Icons.edit,
+                                size: 20,
+                                color: Colors.blue,
+                              ),
                               onPressed: () async {
-                                final edited = await _showEditEndpointDialog(endpoint);
+                                final edited = await _showEditEndpointDialog(
+                                  endpoint,
+                                );
                                 if (edited != null) {
                                   final index = endpoints.indexOf(endpoint);
                                   if (index != -1) {
@@ -4371,15 +4976,23 @@ $placemarks  </Document>
                                       selectedNames.add(edited.name);
                                     }
                                     endpoints[index] = edited;
-                                    await _uploadService.setUploadEndpoints(endpoints);
-                                    await _uploadService.setSelectedEndpoints(selectedNames);
+                                    await _uploadService.setUploadEndpoints(
+                                      endpoints,
+                                    );
+                                    await _uploadService.setSelectedEndpoints(
+                                      selectedNames,
+                                    );
                                     setModalState(() {});
                                   }
                                 }
                               },
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                              icon: const Icon(
+                                Icons.delete,
+                                size: 20,
+                                color: Colors.red,
+                              ),
                               onPressed: () async {
                                 final confirmed = await showDialog<bool>(
                                   context: context,
@@ -4388,12 +5001,16 @@ $placemarks  </Document>
                                     content: Text('Delete "${endpoint.name}"?'),
                                     actions: [
                                       TextButton(
-                                        onPressed: () => Navigator.pop(ctx, false),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
                                         child: const Text('Cancel'),
                                       ),
                                       TextButton(
-                                        onPressed: () => Navigator.pop(ctx, true),
-                                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                        ),
                                         child: const Text('Delete'),
                                       ),
                                     ],
@@ -4402,8 +5019,12 @@ $placemarks  </Document>
                                 if (confirmed == true) {
                                   endpoints.remove(endpoint);
                                   selectedNames.remove(endpoint.name);
-                                  await _uploadService.setUploadEndpoints(endpoints);
-                                  await _uploadService.setSelectedEndpoints(selectedNames);
+                                  await _uploadService.setUploadEndpoints(
+                                    endpoints,
+                                  );
+                                  await _uploadService.setSelectedEndpoints(
+                                    selectedNames,
+                                  );
                                   setModalState(() {});
                                 }
                               },
@@ -4422,7 +5043,9 @@ $placemarks  </Document>
                             endpoints.add(result);
                             selectedNames.add(result.name);
                             await _uploadService.setUploadEndpoints(endpoints);
-                            await _uploadService.setSelectedEndpoints(selectedNames);
+                            await _uploadService.setSelectedEndpoints(
+                              selectedNames,
+                            );
                             setModalState(() {});
                           }
                         },
@@ -4436,7 +5059,9 @@ $placemarks  </Document>
                       ),
                       TextButton(
                         onPressed: () async {
-                          await _uploadService.setSelectedEndpoints(selectedNames);
+                          await _uploadService.setSelectedEndpoints(
+                            selectedNames,
+                          );
                           Navigator.pop(context);
                           _showSnackBar('Upload sites updated');
                         },
@@ -4452,20 +5077,20 @@ $placemarks  </Document>
       ),
     );
   }
-  
+
   Future<void> _showOfflineTileDownload() async {
     if (_tileCacheStore == null) {
       _showSnackBar('Tile cache not initialized');
       return;
     }
-    
+
     final bounds = _mapController.camera.visibleBounds;
     final currentZoom = _mapController.camera.zoom.floor();
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     int minZoom = currentZoom;
     int maxZoom = (currentZoom + 3).clamp(0, 18);
-    
+
     final result = await showDialog<Map<String, int>>(
       context: context,
       builder: (context) {
@@ -4477,8 +5102,10 @@ $placemarks  </Document>
               minZoom,
               maxZoom,
             );
-            final estimatedMB = (tileCount * 15 / 1024).toStringAsFixed(1); // ~15KB per tile
-            
+            final estimatedMB = (tileCount * 15 / 1024).toStringAsFixed(
+              1,
+            ); // ~15KB per tile
+
             return AlertDialog(
               title: const Text('Download Offline Tiles'),
               content: Column(
@@ -4545,14 +5172,15 @@ $placemarks  </Document>
         );
       },
     );
-    
+
     if (result == null || !mounted) return;
-    
+
     final urlTemplate = isDarkMode
         ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
         : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-    
-    final cacheDir = (await getApplicationDocumentsDirectory()).path + '/tile_cache';
+
+    final cacheDir =
+        (await getApplicationDocumentsDirectory()).path + '/tile_cache';
     final downloader = TileDownloadService(cacheDir);
     final totalTiles = TileDownloadService.estimateTileCount(
       bounds.southWest,
@@ -4560,7 +5188,7 @@ $placemarks  </Document>
       result['minZoom']!,
       result['maxZoom']!,
     );
-    
+
     // Show progress dialog
     bool downloadCancelled = false;
     showDialog(
@@ -4572,27 +5200,31 @@ $placemarks  </Document>
           builder: (context, setProgressState) {
             // Start download on first build
             if (completed == 0) {
-              downloader.downloadTiles(
-                sw: bounds.southWest,
-                ne: bounds.northEast,
-                minZoom: result['minZoom']!,
-                maxZoom: result['maxZoom']!,
-                urlTemplate: urlTemplate,
-                onProgress: (done, total) {
-                  if (context.mounted) {
-                    setProgressState(() { completed = done; });
-                  }
-                },
-              ).then((succeeded) {
-                if (context.mounted) Navigator.pop(context);
-                if (!downloadCancelled) {
-                  _showSnackBar('Downloaded $succeeded/$totalTiles tiles');
-                }
-              });
+              downloader
+                  .downloadTiles(
+                    sw: bounds.southWest,
+                    ne: bounds.northEast,
+                    minZoom: result['minZoom']!,
+                    maxZoom: result['maxZoom']!,
+                    urlTemplate: urlTemplate,
+                    onProgress: (done, total) {
+                      if (context.mounted) {
+                        setProgressState(() {
+                          completed = done;
+                        });
+                      }
+                    },
+                  )
+                  .then((succeeded) {
+                    if (context.mounted) Navigator.pop(context);
+                    if (!downloadCancelled) {
+                      _showSnackBar('Downloaded $succeeded/$totalTiles tiles');
+                    }
+                  });
             }
-            
+
             final progress = totalTiles > 0 ? completed / totalTiles : 0.0;
-            
+
             return AlertDialog(
               title: const Text('Downloading Tiles'),
               content: Column(
@@ -4609,7 +5241,9 @@ $placemarks  </Document>
                     downloadCancelled = true;
                     downloader.cancel();
                     Navigator.pop(context);
-                    _showSnackBar('Download cancelled ($completed tiles cached)');
+                    _showSnackBar(
+                      'Download cancelled ($completed tiles cached)',
+                    );
                   },
                   child: const Text('Cancel'),
                 ),
@@ -4620,51 +5254,66 @@ $placemarks  </Document>
       },
     );
   }
-  
+
   Future<void> _shareCoverageMap() async {
     try {
       // Hide UI elements for clean screenshot
-      setState(() { _hideUIForScreenshot = true; });
+      setState(() {
+        _hideUIForScreenshot = true;
+      });
       await Future.delayed(const Duration(milliseconds: 300));
-      
-      final Uint8List? imageBytes = await _screenshotController.capture(pixelRatio: 2.0);
-      
-      setState(() { _hideUIForScreenshot = false; });
-      
+
+      final Uint8List? imageBytes = await _screenshotController.capture(
+        pixelRatio: 2.0,
+      );
+
+      setState(() {
+        _hideUIForScreenshot = false;
+      });
+
       if (imageBytes == null) {
         _showSnackBar('Failed to capture screenshot');
         return;
       }
-      
+
       // Build stats text
       final pingSamples = _samples.where((s) => s.pingSuccess != null).toList();
-      final successCount = pingSamples.where((s) => s.pingSuccess == true).length;
+      final successCount = pingSamples
+          .where((s) => s.pingSuccess == true)
+          .length;
       final failCount = pingSamples.where((s) => s.pingSuccess == false).length;
       final totalPings = successCount + failCount;
-      final successRate = totalPings > 0 ? ((successCount / totalPings) * 100).toStringAsFixed(0) : 'N/A';
+      final successRate = totalPings > 0
+          ? ((successCount / totalPings) * 100).toStringAsFixed(0)
+          : 'N/A';
       final coverageCount = _aggregationResult?.coverages.length ?? 0;
-      
-      final statsText = 'MeshCore Wardrive Coverage Map\n'
+
+      final statsText =
+          'MeshCore Wardrive Coverage Map\n'
           '📍 ${_samples.length} samples • $coverageCount coverage areas\n'
           '✅ $successCount success • ❌ $failCount failed • $successRate% rate\n'
           '🔁 ${_repeaters.length} repeaters discovered';
-      
+
       // Save temp file and share
       final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/meshcore_coverage_${DateTime.now().millisecondsSinceEpoch}.png');
+      final file = File(
+        '${tempDir.path}/meshcore_coverage_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
       await file.writeAsBytes(imageBytes);
-      
+
       await Share.shareXFiles(
         [XFile(file.path)],
         subject: 'MeshCore Wardrive Coverage',
         text: statsText,
       );
     } catch (e) {
-      setState(() { _hideUIForScreenshot = false; });
+      setState(() {
+        _hideUIForScreenshot = false;
+      });
       _showSnackBar('Share failed: $e');
     }
   }
-  
+
   void _showRepeaterFilterPicker() {
     // Collect all known repeater IDs from coverage data and discovered repeaters
     final Set<String> knownIds = {};
@@ -4676,14 +5325,14 @@ $placemarks  </Document>
     for (final r in _repeaters) {
       knownIds.add(r.id);
     }
-    
+
     if (knownIds.isEmpty) {
       _showSnackBar('No repeaters found yet - do some wardriving first!');
       return;
     }
-    
+
     final sortedIds = knownIds.toList()..sort();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -4695,25 +5344,34 @@ $placemarks  </Document>
             itemCount: sortedIds.length,
             itemBuilder: (context, index) {
               final id = sortedIds[index];
-              final displayId = (id.length > 8 ? id.substring(0, 8) : id).toUpperCase();
+              final displayId = (id.length > 8 ? id.substring(0, 8) : id)
+                  .toUpperCase();
               // Find matching repeater for name
               final repeater = _repeaters.cast<Repeater?>().firstWhere(
-                (r) => r!.id == id, orElse: () => null,
+                (r) => r!.id == id,
+                orElse: () => null,
               );
               final name = repeater?.name;
               final isSelected = _includeOnlyRepeaters == id;
-              
+
               return ListTile(
                 leading: Icon(
                   Icons.cell_tower,
                   color: isSelected ? Colors.blue : Colors.purple,
                 ),
                 title: Text(name ?? 'Repeater $displayId'),
-                subtitle: Text(displayId, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
-                trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.blue) : null,
+                subtitle: Text(
+                  displayId,
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+                trailing: isSelected
+                    ? const Icon(Icons.check_circle, color: Colors.blue)
+                    : null,
                 onTap: () async {
                   Navigator.pop(context);
-                  setState(() { _includeOnlyRepeaters = id; });
+                  setState(() {
+                    _includeOnlyRepeaters = id;
+                  });
                   await _settingsService.setIncludeOnlyRepeaters(id);
                   _loadSamples();
                   _showSnackBar('Showing coverage from $displayId');
@@ -4723,16 +5381,22 @@ $placemarks  </Document>
           ),
         ),
         actions: [
-          if (_includeOnlyRepeaters != null && _includeOnlyRepeaters!.isNotEmpty)
+          if (_includeOnlyRepeaters != null &&
+              _includeOnlyRepeaters!.isNotEmpty)
             TextButton(
               onPressed: () async {
                 Navigator.pop(context);
-                setState(() { _includeOnlyRepeaters = null; });
+                setState(() {
+                  _includeOnlyRepeaters = null;
+                });
                 await _settingsService.setIncludeOnlyRepeaters(null);
                 _loadSamples();
                 _showSnackBar('Repeater filter cleared');
               },
-              child: const Text('Clear Filter', style: TextStyle(color: Colors.red)),
+              child: const Text(
+                'Clear Filter',
+                style: TextStyle(color: Colors.red),
+              ),
             ),
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -4742,36 +5406,39 @@ $placemarks  </Document>
       ),
     );
   }
-  
+
   void _findCoverageGaps() {
     if (_aggregationResult == null || _aggregationResult!.coverages.isEmpty) {
       _showSnackBar('No coverage data yet - do some wardriving first!');
       return;
     }
-    
+
     // Find coverage areas with low/zero success rate
     final gaps = <Coverage>[];
     for (final cov in _aggregationResult!.coverages) {
       final total = cov.received + cov.lost;
       if (total == 0) continue; // Skip GPS-only areas
       final successRate = cov.received / total;
-      if (successRate < 0.3) { // Less than 30% success = gap
+      if (successRate < 0.3) {
+        // Less than 30% success = gap
         gaps.add(cov);
       }
     }
-    
+
     // Sort by success rate (worst first)
     gaps.sort((a, b) {
       final aRate = a.received / (a.received + a.lost);
       final bRate = b.received / (b.received + b.lost);
       return aRate.compareTo(bRate);
     });
-    
+
     if (gaps.isEmpty) {
-      _showSnackBar('No coverage gaps found! All areas have >30% success rate.');
+      _showSnackBar(
+        'No coverage gaps found! All areas have >30% success rate.',
+      );
       return;
     }
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -4784,7 +5451,9 @@ $placemarks  </Document>
             itemBuilder: (context, index) {
               final gap = gaps[index];
               final total = gap.received + gap.lost;
-              final rate = total > 0 ? ((gap.received / total) * 100).toStringAsFixed(0) : '0';
+              final rate = total > 0
+                  ? ((gap.received / total) * 100).toStringAsFixed(0)
+                  : '0';
               return ListTile(
                 leading: Icon(
                   Icons.warning,
@@ -4814,10 +5483,12 @@ $placemarks  </Document>
     );
   }
 
-  Future<UploadEndpoint?> _showEditEndpointDialog(UploadEndpoint existing) async {
+  Future<UploadEndpoint?> _showEditEndpointDialog(
+    UploadEndpoint existing,
+  ) async {
     final nameController = TextEditingController(text: existing.name);
     final urlController = TextEditingController(text: existing.url);
-    
+
     return await showDialog<UploadEndpoint>(
       context: context,
       builder: (context) => AlertDialog(
@@ -4827,17 +5498,13 @@ $placemarks  </Document>
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Site Name',
-              ),
+              decoration: const InputDecoration(labelText: 'Site Name'),
               autofocus: true,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: urlController,
-              decoration: const InputDecoration(
-                labelText: 'API URL',
-              ),
+              decoration: const InputDecoration(labelText: 'API URL'),
               keyboardType: TextInputType.url,
             ),
           ],
@@ -4849,7 +5516,8 @@ $placemarks  </Document>
           ),
           TextButton(
             onPressed: () {
-              if (nameController.text.isNotEmpty && urlController.text.isNotEmpty) {
+              if (nameController.text.isNotEmpty &&
+                  urlController.text.isNotEmpty) {
                 Navigator.pop(
                   context,
                   UploadEndpoint(
@@ -4869,7 +5537,7 @@ $placemarks  </Document>
   Future<UploadEndpoint?> _showAddEndpointDialog() async {
     final nameController = TextEditingController();
     final urlController = TextEditingController();
-    
+
     return await showDialog<UploadEndpoint>(
       context: context,
       builder: (context) => AlertDialog(
@@ -4903,7 +5571,8 @@ $placemarks  </Document>
           ),
           TextButton(
             onPressed: () {
-              if (nameController.text.isNotEmpty && urlController.text.isNotEmpty) {
+              if (nameController.text.isNotEmpty &&
+                  urlController.text.isNotEmpty) {
                 Navigator.pop(
                   context,
                   UploadEndpoint(
@@ -4919,5 +5588,4 @@ $placemarks  </Document>
       ),
     );
   }
-  
 }

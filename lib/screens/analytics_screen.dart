@@ -31,9 +31,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Analytics'),
-      ),
+      appBar: AppBar(title: const Text('Analytics')),
       body: IndexedStack(
         index: _tabIndex,
         children: [
@@ -56,8 +54,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.schedule), label: 'Time'),
           BottomNavigationBarItem(icon: Icon(Icons.flag), label: 'Goals'),
-          BottomNavigationBarItem(icon: Icon(Icons.compare_arrows), label: 'Compare'),
-          BottomNavigationBarItem(icon: Icon(Icons.cell_tower), label: 'Repeaters'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.compare_arrows),
+            label: 'Compare',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.cell_tower),
+            label: 'Repeaters',
+          ),
         ],
       ),
     );
@@ -78,7 +82,10 @@ class _TimeOfDayTab extends StatelessWidget {
 
     if (pingSamples.isEmpty) {
       return const Center(
-        child: Text('No ping data yet.\nDo some wardriving first!', textAlign: TextAlign.center),
+        child: Text(
+          'No ping data yet.\nDo some wardriving first!',
+          textAlign: TextAlign.center,
+        ),
       );
     }
 
@@ -100,7 +107,9 @@ class _TimeOfDayTab extends StatelessWidget {
       if (hourSamples.isEmpty) {
         rates[h] = -1; // No data
       } else {
-        final successes = hourSamples.where((s) => s.pingSuccess == true).length;
+        final successes = hourSamples
+            .where((s) => s.pingSuccess == true)
+            .length;
         rates[h] = successes / hourSamples.length;
       }
     }
@@ -124,11 +133,15 @@ class _TimeOfDayTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Success Rate by Hour',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text(
+            'Success Rate by Hour',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 4),
-          Text('${pingSamples.length} pings analyzed',
-              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(
+            '${pingSamples.length} pings analyzed',
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
+          ),
           const SizedBox(height: 16),
           SizedBox(
             height: 220,
@@ -157,8 +170,10 @@ class _TimeOfDayTab extends StatelessWidget {
                       showTitles: true,
                       reservedSize: 36,
                       getTitlesWidget: (value, meta) {
-                        return Text('${(value * 100).toInt()}%',
-                            style: const TextStyle(fontSize: 9));
+                        return Text(
+                          '${(value * 100).toInt()}%',
+                          style: const TextStyle(fontSize: 9),
+                        );
                       },
                       interval: 0.25,
                     ),
@@ -167,14 +182,21 @@ class _TimeOfDayTab extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       getTitlesWidget: (value, meta) {
-                        if (value.toInt() % 3 != 0) return const SizedBox.shrink();
-                        return Text('${value.toInt()}',
-                            style: const TextStyle(fontSize: 9));
+                        if (value.toInt() % 3 != 0)
+                          return const SizedBox.shrink();
+                        return Text(
+                          '${value.toInt()}',
+                          style: const TextStyle(fontSize: 9),
+                        );
                       },
                     ),
                   ),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
                 ),
                 borderData: FlBorderData(show: false),
                 gridData: FlGridData(
@@ -193,12 +215,14 @@ class _TimeOfDayTab extends StatelessWidget {
                         color: !hasData
                             ? Colors.grey.withValues(alpha: 0.2)
                             : rate > 0.7
-                                ? Colors.green
-                                : rate > 0.3
-                                    ? Colors.orange
-                                    : Colors.red,
+                            ? Colors.green
+                            : rate > 0.3
+                            ? Colors.orange
+                            : Colors.red,
                         width: 8,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(2),
+                        ),
                       ),
                     ],
                   );
@@ -209,24 +233,40 @@ class _TimeOfDayTab extends StatelessWidget {
           const SizedBox(height: 24),
           // Summary
           if (bestHour != null) ...[
-            const Text('Summary', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            const Text(
+              'Summary',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
-            _summaryRow('Best hour', '${bestHour.toString().padLeft(2, '0')}:00 — ${(rates[bestHour]! * 100).toStringAsFixed(0)}%', Colors.green),
-            _summaryRow('Worst hour', '${worstHour.toString().padLeft(2, '0')}:00 — ${(rates[worstHour]! * 100).toStringAsFixed(0)}%', Colors.red),
+            _summaryRow(
+              'Best hour',
+              '${bestHour.toString().padLeft(2, '0')}:00 — ${(rates[bestHour]! * 100).toStringAsFixed(0)}%',
+              Colors.green,
+            ),
+            _summaryRow(
+              'Worst hour',
+              '${worstHour.toString().padLeft(2, '0')}:00 — ${(rates[worstHour]! * 100).toStringAsFixed(0)}%',
+              Colors.red,
+            ),
             const SizedBox(height: 16),
           ],
-          const Text('By Period', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const Text(
+            'By Period',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           ...periods.entries.map((e) {
             final rate = e.value;
-            final label = rate != null ? '${(rate * 100).toStringAsFixed(0)}%' : 'No data';
+            final label = rate != null
+                ? '${(rate * 100).toStringAsFixed(0)}%'
+                : 'No data';
             final color = rate == null
                 ? Colors.grey
                 : rate > 0.7
-                    ? Colors.green
-                    : rate > 0.3
-                        ? Colors.orange
-                        : Colors.red;
+                ? Colors.green
+                : rate > 0.3
+                ? Colors.orange
+                : Colors.red;
             return _summaryRow(e.key, label, color);
           }),
         ],
@@ -241,14 +281,25 @@ class _TimeOfDayTab extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(fontSize: 13)),
-          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
   }
 
   double? _periodRate(List<Sample> samples, int startHour, int endHour) {
-    final period = samples.where((s) => s.timestamp.hour >= startHour && s.timestamp.hour < endHour).toList();
+    final period = samples
+        .where(
+          (s) => s.timestamp.hour >= startHour && s.timestamp.hour < endHour,
+        )
+        .toList();
     if (period.isEmpty) return null;
     final successes = period.where((s) => s.pingSuccess == true).length;
     return successes / period.length;
@@ -314,11 +365,16 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
             children: [
               const Icon(Icons.flag_outlined, size: 64, color: Colors.grey),
               const SizedBox(height: 16),
-              const Text('No coverage goal set',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Text(
+                'No coverage goal set',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              const Text('Set a target area to track your wardriving progress.',
-                  textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+              const Text(
+                'Set a target area to track your wardriving progress.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: _setGoal,
@@ -341,14 +397,19 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
         children: [
           Row(
             children: [
-              const Text('Coverage Goal',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Text(
+                'Coverage Goal',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
               const Spacer(),
               TextButton(onPressed: _setGoal, child: const Text('Edit')),
               TextButton(
                 onPressed: () async {
                   await _settings.clearGoal();
-                  setState(() { _goalLat = null; _goalLon = null; });
+                  setState(() {
+                    _goalLat = null;
+                    _goalLon = null;
+                  });
                 },
                 child: const Text('Clear', style: TextStyle(color: Colors.red)),
               ),
@@ -381,8 +442,8 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
                         goalResult.coveragePercent > 70
                             ? Colors.green
                             : goalResult.coveragePercent > 30
-                                ? Colors.orange
-                                : Colors.red,
+                            ? Colors.orange
+                            : Colors.red,
                       ),
                     ),
                   ),
@@ -391,9 +452,15 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
                     children: [
                       Text(
                         '${goalResult.coveragePercent.toStringAsFixed(0)}%',
-                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      const Text('covered', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text(
+                        'covered',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                     ],
                   ),
                 ],
@@ -403,8 +470,16 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
           const SizedBox(height: 24),
           // Stats
           _goalStatRow('Total cells in area', '${goalResult.totalCells}'),
-          _goalStatRow('Covered (>0% success)', '${goalResult.coveredCells}', Colors.green),
-          _goalStatRow('Partial (<30% success)', '${goalResult.partialCells}', Colors.orange),
+          _goalStatRow(
+            'Covered (>0% success)',
+            '${goalResult.coveredCells}',
+            Colors.green,
+          ),
+          _goalStatRow(
+            'Partial (<30% success)',
+            '${goalResult.partialCells}',
+            Colors.orange,
+          ),
           _goalStatRow('Uncovered', '${goalResult.uncoveredCells}', Colors.red),
           _goalStatRow('Pings in area', '${goalResult.pingsInArea}'),
         ],
@@ -419,11 +494,14 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(fontSize: 13)),
-          Text(value, style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: color,
-          )),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
@@ -451,18 +529,32 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
         final point = LatLng(lat, lon);
         final dist = distance.as(LengthUnit.Meter, center, point);
         if (dist <= _goalRadiusMeters) {
-          final hash = geohash.GeoHash.encode(lat, lon, precision: widget.coveragePrecision).hash;
+          final hash = geohash.GeoHash.encode(
+            lat,
+            lon,
+            precision: widget.coveragePrecision,
+          ).hash;
           cellsInArea.add(hash);
         }
       }
     }
 
     if (cellsInArea.isEmpty) {
-      return _GoalProgress(totalCells: 0, coveredCells: 0, partialCells: 0, uncoveredCells: 0, pingsInArea: 0);
+      return _GoalProgress(
+        totalCells: 0,
+        coveredCells: 0,
+        partialCells: 0,
+        uncoveredCells: 0,
+        pingsInArea: 0,
+      );
     }
 
     // Build coverage for current samples
-    final result = AggregationService.buildIndexes(widget.samples, [], coveragePrecision: widget.coveragePrecision);
+    final result = AggregationService.buildIndexes(
+      widget.samples,
+      [],
+      coveragePrecision: widget.coveragePrecision,
+    );
     final coverageMap = {for (final c in result.coverages) c.id: c};
 
     int covered = 0;
@@ -499,12 +591,18 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
   double _geohashStepDegrees(int precision) {
     // Approximate latitude step for each geohash precision level
     switch (precision) {
-      case 4: return 0.18;   // ~20km
-      case 5: return 0.044;  // ~5km
-      case 6: return 0.011;  // ~1.2km
-      case 7: return 0.0014; // ~153m
-      case 8: return 0.00034; // ~38m
-      default: return 0.011;
+      case 4:
+        return 0.18; // ~20km
+      case 5:
+        return 0.044; // ~5km
+      case 6:
+        return 0.011; // ~1.2km
+      case 7:
+        return 0.0014; // ~153m
+      case 8:
+        return 0.00034; // ~38m
+      default:
+        return 0.011;
     }
   }
 
@@ -536,22 +634,29 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (useCurrentPos)
-                const Text('Center: Your current GPS location',
-                    style: TextStyle(fontSize: 13))
+                const Text(
+                  'Center: Your current GPS location',
+                  style: TextStyle(fontSize: 13),
+                )
               else
                 Text(
                   'Center: ${(_goalLat ?? 0).toStringAsFixed(4)}, ${(_goalLon ?? 0).toStringAsFixed(4)}',
                   style: const TextStyle(fontSize: 13),
                 ),
               const SizedBox(height: 16),
-              const Text('Radius:', style: TextStyle(fontWeight: FontWeight.bold)),
-              ...radiusOptions.map((opt) => RadioListTile<double>(
-                title: Text(opt['label'] as String),
-                value: opt['meters'] as double,
-                groupValue: selectedRadius,
-                onChanged: (v) => setDialogState(() => selectedRadius = v!),
-                dense: true,
-              )),
+              const Text(
+                'Radius:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ...radiusOptions.map(
+                (opt) => RadioListTile<double>(
+                  title: Text(opt['label'] as String),
+                  value: opt['meters'] as double,
+                  groupValue: selectedRadius,
+                  onChanged: (v) => setDialogState(() => selectedRadius = v!),
+                  dense: true,
+                ),
+              ),
             ],
           ),
           actions: [
@@ -569,8 +674,12 @@ class _CoverageGoalTabState extends State<_CoverageGoalTab> {
     );
 
     if (confirmed == true) {
-      final lat = useCurrentPos ? widget.currentPosition!.latitude : (_goalLat ?? 0);
-      final lon = useCurrentPos ? widget.currentPosition!.longitude : (_goalLon ?? 0);
+      final lat = useCurrentPos
+          ? widget.currentPosition!.latitude
+          : (_goalLat ?? 0);
+      final lon = useCurrentPos
+          ? widget.currentPosition!.longitude
+          : (_goalLon ?? 0);
       await _settings.setGoal(lat, lon, selectedRadius);
       setState(() {
         _goalLat = lat;
@@ -629,7 +738,9 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
   Future<void> _loadSessions() async {
     final sessions = await _dbService.getAllSessions();
     setState(() {
-      _sessions = sessions.where((s) => s.endTime != null && s.pingCount > 0).toList();
+      _sessions = sessions
+          .where((s) => s.endTime != null && s.pingCount > 0)
+          .toList();
       _loading = false;
     });
   }
@@ -641,15 +752,25 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
 
     // Load samples for each session
     final samplesA = await _dbService.getSamplesByTimeRange(
-      _sessionA!.startTime, _sessionA!.endTime!,
+      _sessionA!.startTime,
+      _sessionA!.endTime!,
     );
     final samplesB = await _dbService.getSamplesByTimeRange(
-      _sessionB!.startTime, _sessionB!.endTime!,
+      _sessionB!.startTime,
+      _sessionB!.endTime!,
     );
 
     // Aggregate each
-    final resultA = AggregationService.buildIndexes(samplesA, [], coveragePrecision: widget.coveragePrecision);
-    final resultB = AggregationService.buildIndexes(samplesB, [], coveragePrecision: widget.coveragePrecision);
+    final resultA = AggregationService.buildIndexes(
+      samplesA,
+      [],
+      coveragePrecision: widget.coveragePrecision,
+    );
+    final resultB = AggregationService.buildIndexes(
+      samplesB,
+      [],
+      coveragePrecision: widget.coveragePrecision,
+    );
 
     final mapA = {for (final c in resultA.coverages) c.id: c};
     final mapB = {for (final c in resultB.coverages) c.id: c};
@@ -667,8 +788,12 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
       } else if (a != null && b == null) {
         lostCells++;
       } else if (a != null && b != null) {
-        final rateA = (a.received + a.lost) > 0 ? a.received / (a.received + a.lost) : 0.0;
-        final rateB = (b.received + b.lost) > 0 ? b.received / (b.received + b.lost) : 0.0;
+        final rateA = (a.received + a.lost) > 0
+            ? a.received / (a.received + a.lost)
+            : 0.0;
+        final rateB = (b.received + b.lost) > 0
+            ? b.received / (b.received + b.lost)
+            : 0.0;
         if (rateB - rateA > 0.1) {
           improved++;
         } else if (rateA - rateB > 0.1) {
@@ -722,8 +847,11 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
 
     if (_sessions.length < 2) {
       return const Center(
-        child: Text('Need at least 2 completed sessions\nwith ping data to compare.',
-            textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+        child: Text(
+          'Need at least 2 completed sessions\nwith ping data to compare.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey),
+        ),
       );
     }
 
@@ -732,16 +860,35 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Compare Sessions',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text(
+            'Compare Sessions',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
-          _sessionPicker('Session A (baseline)', _sessionA, (s) => setState(() { _sessionA = s; _result = null; })),
+          _sessionPicker(
+            'Session A (baseline)',
+            _sessionA,
+            (s) => setState(() {
+              _sessionA = s;
+              _result = null;
+            }),
+          ),
           const SizedBox(height: 8),
-          _sessionPicker('Session B (compare)', _sessionB, (s) => setState(() { _sessionB = s; _result = null; })),
+          _sessionPicker(
+            'Session B (compare)',
+            _sessionB,
+            (s) => setState(() {
+              _sessionB = s;
+              _result = null;
+            }),
+          ),
           const SizedBox(height: 12),
           Center(
             child: ElevatedButton.icon(
-              onPressed: _sessionA != null && _sessionB != null && _sessionA!.id != _sessionB!.id
+              onPressed:
+                  _sessionA != null &&
+                      _sessionB != null &&
+                      _sessionA!.id != _sessionB!.id
                   ? _compare
                   : null,
               icon: const Icon(Icons.compare_arrows),
@@ -754,18 +901,28 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
             const SizedBox(height: 12),
             // Side-by-side stats
             _compRow('Samples', '${_result!.samplesA}', '${_result!.samplesB}'),
-            _compRow('Success Rate',
-                '${(_result!.rateA * 100).toStringAsFixed(0)}%',
-                '${(_result!.rateB * 100).toStringAsFixed(0)}%',
-                delta: _result!.rateB - _result!.rateA),
-            _compRow('Repeaters', '${_result!.repeatersA}', '${_result!.repeatersB}',
-                delta: (_result!.repeatersB - _result!.repeatersA).toDouble()),
-            _compRow('Distance',
-                '${(_result!.distanceA / 1609.34).toStringAsFixed(1)} mi',
-                '${(_result!.distanceB / 1609.34).toStringAsFixed(1)} mi'),
+            _compRow(
+              'Success Rate',
+              '${(_result!.rateA * 100).toStringAsFixed(0)}%',
+              '${(_result!.rateB * 100).toStringAsFixed(0)}%',
+              delta: _result!.rateB - _result!.rateA,
+            ),
+            _compRow(
+              'Repeaters',
+              '${_result!.repeatersA}',
+              '${_result!.repeatersB}',
+              delta: (_result!.repeatersB - _result!.repeatersA).toDouble(),
+            ),
+            _compRow(
+              'Distance',
+              '${(_result!.distanceA / 1609.34).toStringAsFixed(1)} mi',
+              '${(_result!.distanceB / 1609.34).toStringAsFixed(1)} mi',
+            ),
             const SizedBox(height: 16),
-            const Text('Coverage Changes',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            const Text(
+              'Coverage Changes',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             _changeRow('New coverage', _result!.newCells, Colors.green),
             _changeRow('Lost coverage', _result!.lostCells, Colors.red),
@@ -778,7 +935,11 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
     );
   }
 
-  Widget _sessionPicker(String label, WSession? selected, void Function(WSession) onPicked) {
+  Widget _sessionPicker(
+    String label,
+    WSession? selected,
+    void Function(WSession) onPicked,
+  ) {
     final fmt = DateFormat('MMM d, h:mm a');
     return InkWell(
       onTap: () async {
@@ -786,13 +947,17 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
           context: context,
           builder: (context) => SimpleDialog(
             title: Text(label),
-            children: _sessions.map((s) => SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, s),
-              child: Text(
-                '${fmt.format(s.startTime)} — ${s.pingCount} pings, '
-                '${(s.successRate * 100).toStringAsFixed(0)}%',
-              ),
-            )).toList(),
+            children: _sessions
+                .map(
+                  (s) => SimpleDialogOption(
+                    onPressed: () => Navigator.pop(context, s),
+                    child: Text(
+                      '${fmt.format(s.startTime)} — ${s.pingCount} pings, '
+                      '${(s.successRate * 100).toStringAsFixed(0)}%',
+                    ),
+                  ),
+                )
+                .toList(),
           ),
         );
         if (picked != null) onPicked(picked);
@@ -829,22 +994,43 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
       final isPositive = delta > 0;
       deltaWidget = Text(
         isPositive ? '▲' : '▼',
-        style: TextStyle(color: isPositive ? Colors.green : Colors.red, fontSize: 12),
+        style: TextStyle(
+          color: isPositive ? Colors.green : Colors.red,
+          fontSize: 12,
+        ),
       );
     }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          SizedBox(width: 100, child: Text(label, style: const TextStyle(fontSize: 12))),
-          Expanded(child: Text(valueA, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13))),
+          SizedBox(
+            width: 100,
+            child: Text(label, style: const TextStyle(fontSize: 12)),
+          ),
+          Expanded(
+            child: Text(
+              valueA,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
           const Text('→', style: TextStyle(color: Colors.grey)),
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(valueB, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                if (deltaWidget != null) ...[const SizedBox(width: 4), deltaWidget],
+                Text(
+                  valueB,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (deltaWidget != null) ...[
+                  const SizedBox(width: 4),
+                  deltaWidget,
+                ],
               ],
             ),
           ),
@@ -859,12 +1045,21 @@ class _CoverageComparisonTabState extends State<_CoverageComparisonTab> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(children: [
-            Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-            const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 13)),
-          ]),
-          Text('$count', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(fontSize: 13)),
+            ],
+          ),
+          Text(
+            '$count',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );
@@ -879,12 +1074,19 @@ class _ComparisonResult {
   final int newCells, lostCells, improved, degraded, unchanged;
 
   _ComparisonResult({
-    required this.samplesA, required this.samplesB,
-    required this.rateA, required this.rateB,
-    required this.repeatersA, required this.repeatersB,
-    required this.distanceA, required this.distanceB,
-    required this.newCells, required this.lostCells,
-    required this.improved, required this.degraded, required this.unchanged,
+    required this.samplesA,
+    required this.samplesB,
+    required this.rateA,
+    required this.rateB,
+    required this.repeatersA,
+    required this.repeatersB,
+    required this.distanceA,
+    required this.distanceB,
+    required this.newCells,
+    required this.lostCells,
+    required this.improved,
+    required this.degraded,
+    required this.unchanged,
   });
 }
 
@@ -897,7 +1099,8 @@ class _RepeaterReliabilityTab extends StatefulWidget {
   const _RepeaterReliabilityTab({required this.samples});
 
   @override
-  State<_RepeaterReliabilityTab> createState() => _RepeaterReliabilityTabState();
+  State<_RepeaterReliabilityTab> createState() =>
+      _RepeaterReliabilityTabState();
 }
 
 class _RepeaterReliabilityTabState extends State<_RepeaterReliabilityTab> {
@@ -916,18 +1119,26 @@ class _RepeaterReliabilityTabState extends State<_RepeaterReliabilityTab> {
 
     if (byRepeater.isEmpty) {
       return const Center(
-        child: Text('No repeater data yet.\nDo some wardriving first!',
-            textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+        child: Text(
+          'No repeater data yet.\nDo some wardriving first!',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey),
+        ),
       );
     }
 
     // Compute stats per repeater
-    final stats = byRepeater.entries.map((e) => _computeRepeaterStats(e.key, e.value)).toList();
+    final stats = byRepeater.entries
+        .map((e) => _computeRepeaterStats(e.key, e.value))
+        .toList();
 
     // Sort
     switch (_sortBy) {
       case 'responseTime':
-        stats.sort((a, b) => (a.avgResponseMs ?? 99999).compareTo(b.avgResponseMs ?? 99999));
+        stats.sort(
+          (a, b) =>
+              (a.avgResponseMs ?? 99999).compareTo(b.avgResponseMs ?? 99999),
+        );
         break;
       case 'pings':
         stats.sort((a, b) => b.totalPings.compareTo(a.totalPings));
@@ -943,17 +1154,34 @@ class _RepeaterReliabilityTabState extends State<_RepeaterReliabilityTab> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Row(
             children: [
-              Text('${stats.length} repeaters',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              Text(
+                '${stats.length} repeaters',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const Spacer(),
               const Text('Sort: ', style: TextStyle(fontSize: 12)),
               DropdownButton<String>(
                 value: _sortBy,
                 isDense: true,
                 items: const [
-                  DropdownMenuItem(value: 'reliability', child: Text('Reliability', style: TextStyle(fontSize: 12))),
-                  DropdownMenuItem(value: 'responseTime', child: Text('Response Time', style: TextStyle(fontSize: 12))),
-                  DropdownMenuItem(value: 'pings', child: Text('Ping Count', style: TextStyle(fontSize: 12))),
+                  DropdownMenuItem(
+                    value: 'reliability',
+                    child: Text('Reliability', style: TextStyle(fontSize: 12)),
+                  ),
+                  DropdownMenuItem(
+                    value: 'responseTime',
+                    child: Text(
+                      'Response Time',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: 'pings',
+                    child: Text('Ping Count', style: TextStyle(fontSize: 12)),
+                  ),
                 ],
                 onChanged: (v) => setState(() => _sortBy = v!),
               ),
@@ -1012,9 +1240,18 @@ class _RepeaterReliabilityTabState extends State<_RepeaterReliabilityTab> {
               children: [
                 Icon(Icons.cell_tower, size: 18, color: rateColor),
                 const SizedBox(width: 8),
-                Text(displayId, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                Text(
+                  displayId,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const Spacer(),
-                Text(trendIcon, style: TextStyle(color: trendColor, fontSize: 16)),
+                Text(
+                  trendIcon,
+                  style: TextStyle(color: trendColor, fontSize: 16),
+                ),
                 const SizedBox(width: 4),
                 Text(
                   '${(stats.responseRate * 100).toStringAsFixed(0)}%',
@@ -1030,8 +1267,18 @@ class _RepeaterReliabilityTabState extends State<_RepeaterReliabilityTab> {
             Row(
               children: [
                 _miniStat('Pings', '${stats.totalPings}'),
-                _miniStat('Avg Response', stats.avgResponseMs != null ? '${stats.avgResponseMs!.toStringAsFixed(0)} ms' : '—'),
-                _miniStat('Consistency', stats.consistencyScore != null ? stats.consistencyScore!.toStringAsFixed(0) : '—'),
+                _miniStat(
+                  'Avg Response',
+                  stats.avgResponseMs != null
+                      ? '${stats.avgResponseMs!.toStringAsFixed(0)} ms'
+                      : '—',
+                ),
+                _miniStat(
+                  'Consistency',
+                  stats.consistencyScore != null
+                      ? stats.consistencyScore!.toStringAsFixed(0)
+                      : '—',
+                ),
                 _miniStat('Trend', stats.trend),
               ],
             ),
@@ -1052,7 +1299,10 @@ class _RepeaterReliabilityTabState extends State<_RepeaterReliabilityTab> {
       child: Column(
         children: [
           Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey)),
-          Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+          ),
         ],
       ),
     );
@@ -1072,8 +1322,13 @@ class _RepeaterReliabilityTabState extends State<_RepeaterReliabilityTab> {
     double? avgResponse;
     double? stddev;
     if (responseTimes.isNotEmpty) {
-      avgResponse = responseTimes.reduce((a, b) => a + b) / responseTimes.length;
-      final variance = responseTimes.map((t) => (t - avgResponse!) * (t - avgResponse!)).reduce((a, b) => a + b) / responseTimes.length;
+      avgResponse =
+          responseTimes.reduce((a, b) => a + b) / responseTimes.length;
+      final variance =
+          responseTimes
+              .map((t) => (t - avgResponse!) * (t - avgResponse!))
+              .reduce((a, b) => a + b) /
+          responseTimes.length;
       stddev = sqrt(variance);
     }
 
@@ -1082,13 +1337,23 @@ class _RepeaterReliabilityTabState extends State<_RepeaterReliabilityTab> {
     final sevenDaysAgo = now.subtract(const Duration(days: 7));
     final fourteenDaysAgo = now.subtract(const Duration(days: 14));
 
-    final recent = samples.where((s) => s.timestamp.isAfter(sevenDaysAgo)).toList();
-    final prior = samples.where((s) => s.timestamp.isAfter(fourteenDaysAgo) && s.timestamp.isBefore(sevenDaysAgo)).toList();
+    final recent = samples
+        .where((s) => s.timestamp.isAfter(sevenDaysAgo))
+        .toList();
+    final prior = samples
+        .where(
+          (s) =>
+              s.timestamp.isAfter(fourteenDaysAgo) &&
+              s.timestamp.isBefore(sevenDaysAgo),
+        )
+        .toList();
 
     String trend = 'stable';
     if (recent.length >= 3 && prior.length >= 3) {
-      final recentRate = recent.where((s) => s.pingSuccess == true).length / recent.length;
-      final priorRate = prior.where((s) => s.pingSuccess == true).length / prior.length;
+      final recentRate =
+          recent.where((s) => s.pingSuccess == true).length / recent.length;
+      final priorRate =
+          prior.where((s) => s.pingSuccess == true).length / prior.length;
       if (recentRate - priorRate > 0.1) {
         trend = 'improving';
       } else if (priorRate - recentRate > 0.1) {
