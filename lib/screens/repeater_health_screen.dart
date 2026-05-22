@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../models/models.dart';
-import '../services/database_service.dart';
 
 /// Repeater Health Dashboard — per-repeater drill-down with charts,
 /// degradation alerts, coverage cells, and recent ping history.
