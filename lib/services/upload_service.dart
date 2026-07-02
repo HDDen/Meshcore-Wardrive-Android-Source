@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'database_service.dart';
@@ -12,16 +13,23 @@ class UploadService {
       if (s.endsWith('/')) s = s.substring(0, s.length - 1);
       return s;
     }
-    return norm(url) == norm(defaultApiUrl);
+    return norm(url) == norm(defaultRuApiUrl) ||
+        norm(url) == norm(defaultGlobalApiUrl);
   }
   static const String _apiUrlKey = 'upload_api_url';
   static const String _autoUploadKey = 'auto_upload_enabled';
   static const String _lastUploadKey = 'last_upload_timestamp';
   static const String _uploadEndpointsKey = 'upload_endpoints'; // JSON list of endpoints
   static const String _selectedEndpointsKey = 'selected_endpoints'; // JSON list of selected endpoint names
-  
-  // Default URL (user can change this)
-  static const String defaultApiUrl = 'https://meshcoretel.ru/wardrive/samples';
+
+  static const String defaultRuApiUrl = 'https://meshcoretel.ru/wardrive/samples';
+  static const String defaultGlobalApiUrl = 'https://meshcoretel.io/wardrive/samples';
+
+  // Default URL depends on phone locale. User can still change it manually.
+  static String get defaultApiUrl {
+      final locale = Platform.localeName.toLowerCase(); // e.g. ru_RU, en_US
+      return locale.startsWith('ru') ? defaultRuApiUrl : defaultGlobalApiUrl;
+  }
   
   final DatabaseService _db = DatabaseService();
   
